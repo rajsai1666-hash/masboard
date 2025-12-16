@@ -1749,6 +1749,7 @@ function submitStylistForm() {
             // Restore button state
             submitBtn.innerHTML = originalBtnText;
             submitBtn.disabled = false;
+            updateDashboardStats();
         });
 }
 
@@ -2458,6 +2459,7 @@ function proceedWithCustomerSubmission(form, formData, submitBtn) {
         .finally(() => {
             submitBtn.innerHTML = originalBtnText;
             submitBtn.disabled = false;
+            updateDashboardStats();
         });
 }
 
@@ -3775,13 +3777,13 @@ function initializeEnhancedStylistForm() {
             if (input.tagName === 'INPUT') {
                 if (input.type === 'checkbox' && input.name === 'dataAgreement') {
                     // Special handling for data agreement checkbox
-                    if (!input.checked) {
-                        input.style.outline = '2px solid #dc3545';
-                        isValid = false;
-                        errorMessages.push('You must agree to carry personal data to proceed');
-                    } else {
-                        input.style.outline = '';
-                    }
+                    // if (!input.checked) {
+                    //     input.style.outline = '2px solid #dc3545';
+                    //     isValid = false;
+                    //     errorMessages.push('You must agree to carry personal data to proceed');
+                    // } else {
+                    //     input.style.outline = '';
+                    // }
                 } else if (!input.checkValidity()) {
                     input.style.border = '2px solid #dc3545';
                     isValid = false;
