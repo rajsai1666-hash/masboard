@@ -1,3 +1,35 @@
+// Firebase Configuration
+// const firebaseConfig = {
+//     apiKey: "---------------------",
+//     authDomain: "market-activation.firebaseapp.com",
+//     databaseURL: "https://market-activation-default-rtdb.firebaseio.com",
+//     projectId: "market-activation",
+//     storageBucket: "market-activation.firebasestorage.app",
+//     messagingSenderId: "286226385972",
+//     appId: "1:286226385972:web:eafb6b1e5ecff6bfae8e61"
+// };
+import dotenv from "dotenv";
+dotenv.config();
+
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/database';
+
+const firebaseConfig = {
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    databaseURL: process.env.FIREBASE_DATABASE_URL,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID
+};
+
+// Initialize Firebase using a single object parameter (recommended)
+var app = firebase.initializeApp({ ...firebaseConfig });
+const database = firebase.database(app);
+// Firebase availability flag
+let firebaseAvailable = true;
+
 // Secure event binding for logout button
 document.addEventListener('DOMContentLoaded', function () {
     var logoutBtn = document.getElementById('logoutBtn');
@@ -226,26 +258,6 @@ async function encryptData(plainText, passphrase) {
     }
 })();
 
-// Firebase Configuration
-
-const firebaseConfig = {
-    apiKey: "AIzaSyBsqg1lQJGbCTdnaF_LwnqFEj2DnKnx784",
-    authDomain: "market-activation.firebaseapp.com",
-    databaseURL: "https://market-activation-default-rtdb.firebaseio.com",
-    projectId: "market-activation",
-    storageBucket: "market-activation.firebasestorage.app",
-    messagingSenderId: "286226385972",
-    appId: "1:286226385972:web:eafb6b1e5ecff6bfae8e61"
-};
-
-// Initialize Firebase using a single object parameter (recommended)
-var app = firebase.initializeApp({
-    ...firebaseConfig
-});
-const database = firebase.database(app);
-
-// Firebase availability flag
-let firebaseAvailable = true;
 
 // Simplified Security Protection System - Auto Run
 class SecurityProtection {
@@ -637,7 +649,7 @@ async function handleLogin(event) {
                     accessFields: escapeHtml(user.accessFields || 'dashboard'),
                     loginTime: new Date().toISOString()
                 };
-                
+
                 encryptData(JSON.stringify(currentUser), 'user-session-secret').then(encryptedUser => {
                     sessionStorage.setItem('currentUser', encryptedUser);
                 }).catch(e => {
@@ -1076,15 +1088,6 @@ function initializeAccessFieldsDropdown() {
     });
 }
 
-// User Management Functions
-function toggleAddUserForm() {
-    const form = document.getElementById('addUserForm');
-    if (form.style.display === 'none') {
-        form.style.display = 'block';
-    } else {
-        form.style.display = 'none';
-    }
-}
 
 async function submitNewUser() {
     const form = document.getElementById('newUserForm');
@@ -1661,13 +1664,13 @@ function deleteUser(userId) {
         });
 }
 
-function filterUsers() {
-    // Implementation for filtering users
-}
+// function filterUsers() {
+//     // Implementation for filtering users
+// }
 
-function clearUserFilters() {
-    // Implementation for clearing filters
-}
+// function clearUserFilters() {
+//     // Implementation for clearing filters
+// }
 
 // Universal save function for any collection - Firebase ONLY
 function saveToFirebaseAndLocal(collection, documentId, data) {
@@ -5003,7 +5006,7 @@ function initializeRecaptcha() {
     }
 
     try {
-        recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        recaptchaVerifier = new auth.RecaptchaVerifier('recaptcha-container', {
             'size': 'invisible',
             'callback': (response) => {
                 // console.log('reCAPTCHA solved');
@@ -5045,7 +5048,7 @@ function sendOTP() {
     // Initialize reCAPTCHA first, then send OTP
     initializeRecaptcha()
         .then(() => {
-            return firebase.auth(app).signInWithPhoneNumber(fullPhoneNumber, recaptchaVerifier);
+            return auth(app).signInWithPhoneNumber(fullPhoneNumber, recaptchaVerifier);
         })
         .then((result) => {
             confirmationResult = result;
@@ -5236,6 +5239,16 @@ function toggleAddUserForm() {
         document.querySelector('input[name="fullName"]').focus();
     }
 }
+
+// User Management Functions
+// function toggleAddUserForm() {
+//     const form = document.getElementById('addUserForm');
+//     if (form.style.display === 'none') {
+//         form.style.display = 'block';
+//     } else {
+//         form.style.display = 'none';
+//     }
+// }
 
 function addNewUser() {
     const form = document.getElementById('newUserForm');
@@ -5538,7 +5551,7 @@ function displayUsers(userEntries) {
                                 onclick="toggleUserStatus('${escapeHtml(phoneKey)}', '${escapeHtml(user.status)}')">
                                 <i class="fas fa-${escapeHtml(user.status === 'active' ? 'ban' : 'check')}"></i>
                             </button>
-                            <button class="btn btn-outline-danger" onclick="deleteUser('${escapeHtml(phoneKey)}', '${escapeHtml(user.fullName)  }')">
+                            <button class="btn btn-outline-danger" onclick="deleteUser('${escapeHtml(phoneKey)}', '${escapeHtml(user.fullName)}')">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -6966,4 +6979,5 @@ document.addEventListener('DOMContentLoaded', function () {//stylistResult
     // Background security scanning enabled automatically
     // Security checks run quietly in the background every 5 minutes
 });
+
 
