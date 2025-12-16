@@ -1479,11 +1479,11 @@
                         </div>
 
                         <!-- Personal Data Agreement Checkbox -->
-                        <div class="row">
+                        <div class="row d-none">
                             <div class="col-12">
                                 <div class="form-check mb-4">
                                     <input class="form-check-input" type="checkbox" name="dataAgreement"
-                                        id="stylistDataAgreement" required>
+                                        id="stylistDataAgreement">
                                     <label class="form-check-label" for="stylistDataAgreement">
                                         <strong>I agree to carry and process my personal data</strong> for registration
                                         and service purposes.
@@ -1569,7 +1569,7 @@
                                 <div class="mb-3">
                                     <label for="customerTokenNo" class="form-label">Token No.</label>
                                     <input type="text" name="customerTokenNo" class="form-control" id="customerTokenNo"
-                                        pattern="[A-Za-z0-9-]+" title="Only letters, numbers and hyphens allowed"
+                                        pattern="[A-Za-z0-9\-]+" title="Only letters, numbers and hyphens allowed"
                                         placeholder="Enter token number (required)" required>
                                     <span><small id="csttoknmsg" class="d-none text-danger"></small></span>
                                 </div>
