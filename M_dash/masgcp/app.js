@@ -229,7 +229,7 @@ async function encryptData(plainText, passphrase) {
 // Firebase Configuration
 
 const firebaseConfig = {
-    apiKey: "AIzaSyCss4iZUFqOaQsJW-G5CT4WWPxxPjRXs4Y",
+    apiKey: "AIzaSyBsqg1lQJGbCTdnaF_LwnqFEj2DnKnx784",
     authDomain: "market-activation.firebaseapp.com",
     databaseURL: "https://market-activation-default-rtdb.firebaseio.com",
     projectId: "market-activation",
@@ -6966,3 +6966,4 @@ document.addEventListener('DOMContentLoaded', function () {//stylistResult
     // Background security scanning enabled automatically
     // Security checks run quietly in the background every 5 minutes
 });
+
