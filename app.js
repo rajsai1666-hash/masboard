@@ -3205,7 +3205,7 @@ function updateLocationChart(locationCounts) {
                 locationChart.data.labels = ['No data'];
                 locationChart.data.datasets[0].data = [1];
                 locationChart.data.datasets[0].backgroundColor = ['#ddd'];
-                locationChart.options.plugins.title.text = 'No Braiding Data Available';
+                locationChart.options.plugins.title.text = 'No Token Data Available';
             } else {
                 locationChart.data.labels = locations;
                 locationChart.data.datasets[0].data = counts;
@@ -3246,7 +3246,7 @@ function updateDailyChart(customersArray) {
 
     dailyChart.data.labels = last7Days;
     dailyChart.data.datasets[0].data = dailyCounts;
-    dailyChart.data.datasets[0].label = 'Daily Customer Registrations';
+    dailyChart.data.datasets[0].label = 'Daily Braiding Registrations';
     dailyChart.update();
 }
 
@@ -3895,7 +3895,7 @@ function updateCustomerTable(customersList) {
     if (!tbody) return;
 
     if (customersList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan=\"8\" class=\"text-center text-muted\">No customers registered yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan=\"7\" class=\"text-center text-muted\">No braiding registered yet</td></tr>';
         return;
     }
 
@@ -3910,15 +3910,9 @@ function updateCustomerTable(customersList) {
                         <td>
                             <div>
                                 <strong>${data.customerId || 'N/A'}</strong>
-                                <br><small class="text-muted">NAME: ${data.customerName || 'Not Provided'}</small>
                             </div>
                         </td>
-                        <td>
-                            <div>
-                                ${data.customerNumber || 'Not Provided'}
-                                <br><small class="text-muted">Mobile</small>
-                            </div>
-                        </td>
+                        
                         <td>
                             <div>
                                 <strong>${data.stylistName || 'N/A'}</strong>
