@@ -1224,7 +1224,7 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#customers">
-                            <i class="fas fa-user-friends"></i> Customers
+                            <i class="fas fa-user-friends"></i> Token Counts
                         </a>
                     </li>
 
@@ -1344,7 +1344,7 @@
                         <div class="col-lg-6">
                             <div class="card">
                                 <div class="card-header">
-                                    <i class="fas fa-chart-pie me-2"></i> Braiding Distribution by Location
+                                    <i class="fas fa-chart-pie me-2"></i> Token Distribution by Location
                                 </div>
                                 <div class="card-body">
                                     <canvas id="locationChart" height="312"
@@ -1356,7 +1356,7 @@
                         <div class="col-lg-6">
                             <div class="card">
                                 <div class="card-header">
-                                    <i class="fas fa-chart-line me-2"></i> Daily Braiding Progress
+                                    <i class="fas fa-chart-line me-2"></i> Daily Token Progress
                                 </div>
                                 <div class="card-body">
                                     <canvas id="dailyChart" height="312" width="719"
@@ -1531,8 +1531,8 @@
 
                 <!-- Braiding Completion Form -->
                 <div id="braiding-form" class="form-section" style="display: none;">
-                    <h2 class="section-title">Customer Registration</h2>
-                    <p class="text-muted mb-4">Register new customers for branding activation and track their details
+                    <h2 class="section-title">Braiding Count for Stylist</h2>
+                    <p class="text-muted mb-4">Register new token for braiding activation and track their details
                     </p>
 
                     <form id="geoForm" autocomplete="off">
@@ -1638,7 +1638,7 @@
 
                         <div class="d-flex gap-2 flex-wrap mt-4">
                             <button type="submit" class="btn btn-primary" id="registerCustomerBtn">
-                                Register Customer
+                                Register Token
                             </button>
                             <button type="reset" class="btn btn-outline-secondary">Clear Form</button>
                         </div>
@@ -1646,7 +1646,7 @@
 
                     <div id="customerResult" class="mt-3" style="display: none;">
                         <div class="alert" role="alert"></div>
-                        <!-- Success Modal for Customer Registration -->
+                        <!-- Success Modal for Braiding Registration -->
                         <div class="modal fade" id="customerSuccessModal" tabindex="-1"
                             aria-labelledby="customerSuccessModalLabel" aria-hidden="true">
                             <div class="modal-dialog modal-dialog-centered">
@@ -1657,7 +1657,7 @@
                                             aria-label="Close"></button>
                                     </div>
                                     <div class="modal-body">
-                                        Customer registered successfully!
+                                        Token registered successfully!
                                     </div>
                                     <div class="modal-footer">
                                         <button type="button" class="btn btn-primary"
@@ -1821,7 +1821,7 @@
                                         <div class="form-text">CSV should contain columns: Beneficiary Name,
                                             Bank Code, Account Number, Amount, Narration (Transaction_ID)</div>
                                         <div class="form-text mt-2"><strong>Note:</strong> This will update payment
-                                            statuses in the backend database by matching Customer IDs.</div>
+                                            statuses in the backend database by matching Unique IDs.</div>
                                     </div>
                                     <div id="csvPreview" class="mt-3" style="display: none;">
                                         <h6>Preview (first 5 rows):</h6>
@@ -1974,9 +1974,9 @@
                         <div class="card-body">
                             <div class="row g-3">
                                 <div class="col-md-5">
-                                    <label class="form-label">Search by customer Name/Beneficiary Name</label>
+                                    <label class="form-label">Search Beneficiary Name</label>
                                     <input type="text" id="paymentSearchInput" class="form-control"
-                                        placeholder="Search customer name or beneficiary name...">
+                                        placeholder="Search beneficiary name...">
                                 </div>
                                 <div class="col-md-5">
                                     <label class="form-label">Bank</label>
@@ -2072,7 +2072,7 @@
 
                 <!-- Customer Data Section -->
                 <div id="customers" class="dashboard-section" style="display: none;">
-                    <h2 class="section-title">Customer Data</h2>
+                    <h2 class="section-title">Token Data</h2>
 
                     <div class="row g-3 mb-4">
                         <div class="col-md-3">
@@ -2080,7 +2080,7 @@
                                 <div class="card-body">
                                     <i class="fas fa-users fa-lg text-primary"></i>
                                     <div class="value text-primary" id="totalCustomers">0</div>
-                                    <div class="label">Total Customers</div>
+                                    <div class="label">Total Tokens</div>
                                 </div>
                             </div>
                         </div>
@@ -2117,7 +2117,7 @@
                         <div class="card-header">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <i class="fas fa-users me-2"></i> Customer Directory
+                                    <i class="fas fa-users me-2"></i> Token Directory
                                 </div>
                                 <!-- <div class="d-flex gap-2">
                                     <button class="btn btn-outline-primary btn-sm" id="refreshCustomersBtn">
@@ -2137,7 +2137,7 @@
                                                 <i class="fas fa-search"></i>
                                             </span>
                                             <input type="text" class="form-control" id="customerSearch"
-                                                placeholder="Search customers...">
+                                                placeholder="Search token...">
                                         </div>
                                     </div>
                                     <div class="col-md-3">
@@ -2178,8 +2178,8 @@
                                     <thead class="table-dark">
                                         <tr>
                                             <th>Token</th>
-                                            <th>Customer Details</th>
-                                            <th>Contact</th>
+                                            <th>Unique ID</th>
+                                            <!-- <th>Contact</th> -->
                                             <th>Stylist</th>
                                             <th>Registration</th>
                                             <th>Payment</th>
