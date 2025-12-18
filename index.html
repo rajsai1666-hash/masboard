@@ -1415,7 +1415,7 @@
                                     <span><small id="stllocmsg" class="d-none text-danger"></small></span>
                                     <datalist id="stylistLocationDatalist">
                                         <option value="AKURE"></option>
-                                        <option value="ONDA"></option>
+                                        <option value="IBADAN"></option>
                                         <option value="ADO-EKITI"></option>
                                         <option value="ILORIN"></option>
                                         <option value="OSOGBO"></option>
@@ -1739,27 +1739,36 @@
                                                 placeholder="Search stylists Name / code / mobile...">
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-2">
                                         <select class="form-select" id="locationFilter">
                                             <option value="">All Locations</option>
                                             <option value="AKURE">AKURE</option>
-                                            <option value="ONDA">ONDA</option>
+                                            <option value="IBADAN">IBADAN</option>
                                             <option value="ADO-EKITI">ADO-EKITI
                                             </option>
                                             <option value="ILORIN">ILORIN</option>
                                             <option value="OSOGBO">OSOGBO</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-2">
                                         <div class="input-group">
-                                            <span class="input-group-text">
-                                                <i class="fas fa-calendar"></i>
+                                            <span class="input-group-text" style="font-size: 12; font-weight: 400;">From
+                                                <!-- <i class="fas fa-calendar">FROM</i> -->
                                             </span>
-                                            <input type="date" class="form-control" id="stylistDateFilter"
-                                                title="Filter by registration date">
+                                            <input type="date" class="form-control" id="stylistFromDate"
+                                                title="From date" placeholder="From">
                                         </div>
                                     </div>
                                     <div class="col-md-2">
+                                        <div class="input-group">
+                                            <span class="input-group-text" style="font-size: 12; font-weight: 400;">To
+                                                <!-- <i class="fas fa-calendar"></i> -->
+                                            </span>
+                                            <input type="date" class="form-control" id="stylistToDate" title="To date"
+                                                placeholder="To">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-1">
                                         <button class="btn btn-outline-secondary w-100" id="clearStylistFiltersBtn">
                                             <i class="fas fa-times"></i> Clear
                                         </button>
@@ -1772,7 +1781,7 @@
                                 <table class="table table-hover" id="stylistsTable">
                                     <thead class="table-dark">
                                         <tr>
-                                            <th id="sCode">Stylist Code <i class="fas fa-sort"></i></th>
+                                            <th id="sCode">Token Count <i class="fas fa-sort"></i></th>
                                             <th id="sName">Name <i class="fas fa-sort"></i></th>
                                             <th id="sPhone">Phone <i class="fas fa-sort"></i></th>
                                             <th id="sLocation">Location <i class="fas fa-sort"></i></th>
@@ -1884,7 +1893,7 @@
 
                     <div class="card">
                         <div class="card-header">
-                            <i class="fas fa-receipt me-2"></i> Recent Payment Transactions
+                            <i class="fas fa-receipt me-2"></i> Pending Payment Details
                         </div>
                         <div class="card-body">
                             <div class="table-responsive">
@@ -1893,8 +1902,7 @@
                                         <tr>
                                             <th>Date</th>
                                             <th>Stylist</th>
-                                            <th>Client</th>
-                                            <th>Service</th>
+                                            <th>Unique ID</th>
                                             <th>Amount</th>
                                             <th>Status</th>
                                             <th>Payment Date</th>
@@ -1902,7 +1910,7 @@
                                     </thead>
                                     <tbody id="paymentsTableBody">
                                         <tr>
-                                            <td colspan="7" class="text-center text-muted">Loading payment records...
+                                            <td colspan="6" class="text-center text-muted">Loading payment records...
                                             </td>
                                         </tr>
                                     </tbody>
@@ -2137,31 +2145,41 @@
                                                 <i class="fas fa-search"></i>
                                             </span>
                                             <input type="text" class="form-control" id="customerSearch"
-                                                placeholder="Search token...">
+                                                placeholder="Search Unique...">
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-2">
                                         <select class="form-select" id="customerLocationFilter">
                                             <option value="">All Locations</option>
                                             <option value="AKURE">AKURE</option>
-                                            <option value="ONDA">ONDA</option>
-                                            <option value="ADO-EKITI">ADO-EKITI
-                                            </option>
+                                            <option value="IBADAN">IBADAN</option>
+                                            <option value="ADO-EKITI">ADO-EKITI</option>
                                             <option value="ILORIN">ILORIN</option>
                                             <option value="OSOGBO">OSOGBO</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-2">
                                         <select class="form-select" id="customerStylistFilter">
                                             <option value="">All Stylists</option>
                                         </select>
                                     </div>
                                     <div class="col-md-2">
                                         <div class="input-group">
-                                            <span class="input-group-text">
-                                                <i class="fas fa-calendar-day"></i>
+                                            <span class="input-group-text"
+                                                style="font-size:12px; font-weight: 400;">From
+                                                <!-- <i class="fas fa-calendar"></i> -->
                                             </span>
-                                            <input type="date" class="form-control" id="customerDate">
+                                            <input type="date" class="form-control" id="customerFromDate"
+                                                title="From date" placeholder="From">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="input-group">
+                                            <span class="input-group-text" style="font-size:12px; font-weight: 400;">To
+                                                <!-- <i class="fas fa-calendar"></i> -->
+                                            </span>
+                                            <input type="date" class="form-control" id="customerToDate" title="To date"
+                                                placeholder="To">
                                         </div>
                                     </div>
                                     <div class="col-md-1">
@@ -2289,7 +2307,7 @@
                                         <select class="form-select" name="location">
                                             <option value="all">All Locations</option>
                                             <option value="AKURE">AKURE</option>
-                                            <option value="ONDA">ONDA</option>
+                                            <option value="IBADAN">IBADAN</option>
                                             <option value="ADO-EKITI">ADO-EKITI</option>
                                             <option value="ILORIN">ILORIN</option>
                                             <option value="OSOGBO">OSOGBO</option>
@@ -2446,7 +2464,7 @@
                                             <option value="">All Locations</option>
                                             <option value=" all">All Access</option>
                                             <option value="AKURE">Akure</option>
-                                            <option value="ONDA">Ondo</option>
+                                            <option value="IBADAN">Ibadan</option>
                                             <option value="ADO-EKITI">Ado-Ekiti</option>
                                             <option value="ILORIN">Ilorin</option>
                                             <option value="OSOGBO">Osogbo</option>
