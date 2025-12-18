@@ -1424,7 +1424,7 @@ function showEditUserModal(userId, user) {
                                             <select class="form-select" id="editLocation">
                                                 <option value="all" ${safeLocation === 'all' ? 'selected' : ''}>All Locations</option>
                                                 <option value="AKURE" ${safeLocation === 'AKURE' ? 'selected' : ''}>AKURE</option>
-                                                <option value="ONDA" ${safeLocation === 'ONDA' ? 'selected' : ''}>ONDA</option>
+                                                <option value="IBADAN" ${safeLocation === 'IBADAN' ? 'selected' : ''}>IBADAN</option>
                                                 <option value="ADO-EKITI" ${safeLocation === 'ADO-EKITI' ? 'selected' : ''}>ADO-EKITI</option>
                                                 <option value="ILORIN" ${safeLocation === 'ILORIN' ? 'selected' : ''}>ILORIN</option>
                                                 <option value="OSOGBO" ${safeLocation === 'OSOGBO' ? 'selected' : ''}>OSOGBO</option>
@@ -2825,7 +2825,7 @@ function updatePaymentStats(customersList) {
 function getLocationName(code) {
     const locations = {
         'A': 'AKURE',
-        'B': 'ONDA',
+        'B': 'IBADAN',
         'C': 'ADO-EKITI',
         'D': 'ILORIN',
         'E': 'OSOGBO'
