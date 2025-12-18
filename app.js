@@ -77,9 +77,35 @@ document.addEventListener('DOMContentLoaded', function () {
         locationFilter.addEventListener('change', filterStylists);
     }
 
-    var stylistDate = document.getElementById('stylistDate');
-    if (stylistDate) {
-        stylistDate.addEventListener('change', filterStylists);
+    var stylistFromDate = document.getElementById('stylistFromDate');
+    if (stylistFromDate) {
+        stylistFromDate.addEventListener('change', function () {
+            const toDateInput = document.getElementById('stylistToDate');
+            if (this.value && toDateInput) {
+                // Set minimum date for 'to date' to be same as 'from date'
+                toDateInput.min = this.value;
+                // If 'to date' is already set and is before 'from date', clear it
+                if (toDateInput.value && toDateInput.value < this.value) {
+                    toDateInput.value = '';
+                }
+            }
+            filterStylists();
+        });
+    }
+    var stylistToDate = document.getElementById('stylistToDate');
+    if (stylistToDate) {
+        stylistToDate.addEventListener('change', function () {
+            const fromDateInput = document.getElementById('stylistFromDate');
+            if (this.value && fromDateInput) {
+                // Set maximum date for 'from date' to be same as 'to date'
+                fromDateInput.max = this.value;
+                // If 'from date' is already set and is after 'to date', clear it
+                if (fromDateInput.value && fromDateInput.value > this.value) {
+                    fromDateInput.value = '';
+                }
+            }
+            filterStylists();
+        });
     }
     var clearStylistFiltersBtn = document.getElementById('clearStylistFiltersBtn');
     if (clearStylistFiltersBtn) {
@@ -105,15 +131,46 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     var customerLocationFilter = document.getElementById('customerLocationFilter');
     if (customerLocationFilter) {
-        customerLocationFilter.addEventListener('change', filterCustomers);
+        customerLocationFilter.addEventListener('change', function () {
+            // Update stylist dropdown based on selected location
+            populateCustomerStylistFilter(this.value);
+            // Also trigger the main filter function
+            filterCustomers();
+        });
     }
     var customerStylistFilter = document.getElementById('customerStylistFilter');
     if (customerStylistFilter) {
         customerStylistFilter.addEventListener('change', filterCustomers);
     }
-    var customerDate = document.getElementById('customerDate');
-    if (customerDate) {
-        customerDate.addEventListener('change', filterCustomers);
+    var customerFromDate = document.getElementById('customerFromDate');
+    if (customerFromDate) {
+        customerFromDate.addEventListener('change', function () {
+            const toDateInput = document.getElementById('customerToDate');
+            if (this.value && toDateInput) {
+                // Set minimum date for 'to date' to be same as 'from date'
+                toDateInput.min = this.value;
+                // If 'to date' is already set and is before 'from date', clear it
+                if (toDateInput.value && toDateInput.value < this.value) {
+                    toDateInput.value = '';
+                }
+            }
+            filterCustomers();
+        });
+    }
+    var customerToDate = document.getElementById('customerToDate');
+    if (customerToDate) {
+        customerToDate.addEventListener('change', function () {
+            const fromDateInput = document.getElementById('customerFromDate');
+            if (this.value && fromDateInput) {
+                // Set maximum date for 'from date' to be same as 'to date'
+                fromDateInput.max = this.value;
+                // If 'from date' is already set and is after 'to date', clear it
+                if (fromDateInput.value && fromDateInput.value > this.value) {
+                    fromDateInput.value = '';
+                }
+            }
+            filterCustomers();
+        });
     }
     var clearCustomerFiltersBtn = document.getElementById('clearCustomerFiltersBtn');
     if (clearCustomerFiltersBtn) {
@@ -467,7 +524,7 @@ const ACCESS_LEVELS = {
 
 // Master Login Credentials (Only for initial access to Add User form)
 const MASTER_LOGIN = {
-    username: 'master_admin',
+    username: 'master*admin',
     password: 'MASTER@2024#VIJAY',
     role: ACCESS_LEVELS.ADMIN,
     name: 'Master Administrator'
@@ -1813,7 +1870,7 @@ function loadStylists() {
                 id: key,
                 stylistCode: data.stylistCode,
                 stylistName: data.stylistName,
-                stylistLocation: data.location,
+                location: data.location, // Fixed property name
                 phoneNumber: data.phoneNumber,
                 registrationDate: data.registrationDate,
                 status: data.status || 'Active'
@@ -1870,21 +1927,43 @@ function loadStylists() {
                 return;
             }
 
-            tbody.innerHTML = stylistsList.map(([key, data], index) => {
-                const stylistForTable = {
-                    id: key,
-                    code: data.stylistCode,
-                    name: data.stylistName,
-                    phone: data.phoneNumber,
-                    location: data.location,
-                    date: data.registrationDate,
-                    status: data.status || 'Active',
-                    bankName: data.bankName,
-                    bankAccount: data.bankAccountNumber
-                };
-                return `
+            // Fetch customer data to calculate token counts
+            database.ref('customers').once('value', (customerSnapshot) => {
+                const customers = customerSnapshot.val() || {};
+                const customersList = Object.entries(customers);
+
+                // Calculate token count for each stylist
+                const stylistTokenCounts = {};
+                customersList.forEach(([key, customer]) => {
+                    const stylistCode = customer.stylistCode;
+                    if (stylistCode) {
+                        stylistTokenCounts[stylistCode] = (stylistTokenCounts[stylistCode] || 0) + 1;
+                    }
+                });
+
+                tbody.innerHTML = stylistsList.map(([key, data], index) => {
+                    const stylistForTable = {
+                        id: key,
+                        code: data.stylistCode,
+                        name: data.stylistName,
+                        phone: data.phoneNumber,
+                        location: data.location,
+                        date: data.registrationDate,
+                        status: data.status || 'Active',
+                        bankName: data.bankName,
+                        bankAccount: data.bankAccountNumber
+                    };
+
+                    const tokenCount = stylistTokenCounts[data.stylistCode] || 0;
+
+                    return `
                             <tr data-stylist="${JSON.stringify(stylistForTable).replace(/"/g, '&quot;')}">
-                                <td><span class="stylist-code">${data.stylistCode || 'N/A'}</span></td>
+                                <td>
+                                    <div class="text-center">
+                                        <span class="badge bg-primary fs-6">${tokenCount}</span>
+                                        <br><small class="text-muted">Tokens</small>
+                                    </div>
+                                </td>
                                 <td>
                                     <div>
                                         <strong>${data.stylistName || 'N/A'}</strong>
@@ -1918,71 +1997,142 @@ function loadStylists() {
                                 </td>
                             </tr>
                         `;
-            }).join('');
+                }).join('');
 
-            // Now fetch and update earnings for each stylist
-            stylistsList.forEach(([key, data]) => {
-                getEarningsForStylist(data.stylistCode).then(earnings => {
-                    const balanceSpan = tbody.querySelector(`.balance-amount[data-stylist-code="${data.stylistCode}"]`);
-                    const totalSpan = tbody.querySelector(`.total-amount[data-stylist-code="${data.stylistCode}"]`);
+                // Also update the stylistsData array to include token counts for filtering
+                stylistsData = stylistsList.map(([key, data]) => ({
+                    id: key,
+                    code: data.stylistCode,
+                    name: data.stylistName,
+                    phone: data.phoneNumber,
+                    location: data.location,
+                    date: data.registrationDate,
+                    status: data.status || 'Active',
+                    bankName: data.bankName,
+                    bankAccount: data.bankAccountNumber,
+                    tokenCount: stylistTokenCounts[data.stylistCode] || 0
+                }));
 
-                    if (balanceSpan) balanceSpan.textContent = earnings.toBePaidAmount.toFixed(2);
-                    if (totalSpan) totalSpan.textContent = earnings.totalAmount.toFixed(2);
+                // Now fetch and update earnings for each stylist
+                stylistsList.forEach(([key, data]) => {
+                    getEarningsForStylist(data.stylistCode).then(earnings => {
+                        const balanceSpan = tbody.querySelector(`.balance-amount[data-stylist-code="${data.stylistCode}"]`);
+                        const totalSpan = tbody.querySelector(`.total-amount[data-stylist-code="${data.stylistCode}"]`);
+
+                        if (balanceSpan) balanceSpan.textContent = earnings.toBePaidAmount.toFixed(2);
+                        if (totalSpan) totalSpan.textContent = earnings.totalAmount.toFixed(2);
+                    });
+                });
+
+            }).catch(error => {
+                console.error('Error fetching customer data for token counts:', error);
+                // Fallback: show stylists without token counts
+                tbody.innerHTML = stylistsList.map(([key, data], index) => {
+                    const stylistForTable = {
+                        id: key,
+                        code: data.stylistCode,
+                        name: data.stylistName,
+                        phone: data.phoneNumber,
+                        location: data.location,
+                        date: data.registrationDate,
+                        status: data.status || 'Active',
+                        bankName: data.bankName,
+                        bankAccount: data.bankAccountNumber
+                    };
+                    return `
+                            <tr data-stylist="${JSON.stringify(stylistForTable).replace(/"/g, '&quot;')}">
+                                <td>
+                                    <div class="text-center">
+                                        <span class="badge bg-secondary fs-6">0</span>
+                                        <br><small class="text-muted">Tokens</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        <strong>${data.stylistName || 'N/A'}</strong>
+                                        <br><small class="text-muted">ID: ${data.stylistCode || 'N/A'}</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        ${data.phoneNumber || 'N/A'}
+                                        <br><small class="text-muted">Mobile</small>
+                                    </div>
+                                </td>
+                                <td><span class="location-badge">${data.location || 'N/A'}</span></td>
+                                <td>
+                                    <div>
+                                        ${new Date(data.registrationDate).toLocaleDateString() || 'N/A'}
+                                        <br><small class="text-muted">${getDaysSince(data.registrationDate)} days ago</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        <strong>${data.bankAccountNumber || 'N/A'}</strong>
+                                        <br><small class="text-muted">Bank: ${data.bankName || 'N/A'}</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    ₦<span class="balance-amount" data-stylist-code="${data.stylistCode}">...</span>
+                                </td>
+                                <td>
+                                    ₦<span class="total-amount" data-stylist-code="${data.stylistCode}">...</span>
+                                </td>
+                            </tr>
+                        `;
+                }).join('');
+
+                // Update earnings for fallback stylists too
+                stylistsList.forEach(([key, data]) => {
+                    getEarningsForStylist(data.stylistCode).then(earnings => {
+                        const balanceSpan = tbody.querySelector(`.balance-amount[data-stylist-code="${data.stylistCode}"]`);
+                        const totalSpan = tbody.querySelector(`.total-amount[data-stylist-code="${data.stylistCode}"]`);
+
+                        if (balanceSpan) balanceSpan.textContent = earnings.toBePaidAmount.toFixed(2);
+                        if (totalSpan) totalSpan.textContent = earnings.totalAmount.toFixed(2);
+                    });
                 });
             });
-        });
-
-        function getEarningsForStylist(stylistCode) {
-            return new Promise((resolve, reject) => {
-                database.ref('customers').once('value')
-                    .then(snapshot => {
-                        const customers = snapshot.val() || {};
-                        const customersList = Object.values(customers);
-
-                        // Filter customers by stylist code
-                        const stylistCustomers = customersList.filter(customer =>
-                            customer.stylistCode === stylistCode
-                        );
-
-                        let totalAmount = 0;
-                        let toBePaidAmount = 0;
-
-                        stylistCustomers.forEach(customer => {
-                            const paymentAmount = parseFloat(customer.paymentAmount) || 5000;
-                            const paymentStatus = customer.paymentStatus || 'TO BE PAID';
-
-                            totalAmount += paymentAmount;
-
-                            if (paymentStatus !== 'PAID') {
-                                toBePaidAmount += paymentAmount;
-                            }
-                        });
-
-                        resolve({ totalAmount, toBePaidAmount });
-                    })
-                    .catch(error => {
-                        resolve({ totalAmount: 0, toBePaidAmount: 0 });
-                    });
-            });
-        }
-
-        // <td>
-        //                     <div class="btn-group" role="group">
-        //                         <button class="btn btn-sm btn-outline-primary" onclick="viewStylist('${key}')" title="View Details">
-        //                             <i class="fas fa-eye"></i>
-        //                         </button>
-        //                         <button class="btn btn-sm btn-outline-warning" onclick="editStylist('${key}')" title="Edit">
-        //                             <i class="fas fa-edit"></i>
-        //                         </button>
-        //                         <button class="btn btn-sm btn-outline-danger" onclick="deleteStylist(${key})" title="Delete">
-        //                     <i class="fas fa-trash"></i>
-        //                 </button>
-        //                     </div>
-        //                 </td>
+        }); // Close database.ref('stylists').once callback
 
     } else {
         tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">🚫 Firebase connection required. Please check your connection and refresh.</td></tr>';
     }
+}
+
+// Helper function to calculate earnings for a stylist
+function getEarningsForStylist(stylistCode) {
+    return new Promise((resolve, reject) => {
+        database.ref('customers').once('value')
+            .then(snapshot => {
+                const customers = snapshot.val() || {};
+                const customersList = Object.values(customers);
+
+                // Filter customers by stylist code
+                const stylistCustomers = customersList.filter(customer =>
+                    customer.stylistCode === stylistCode
+                );
+
+                let totalAmount = 0;
+                let toBePaidAmount = 0;
+
+                stylistCustomers.forEach(customer => {
+                    const paymentAmount = parseFloat(customer.paymentAmount) || 5000;
+                    const paymentStatus = customer.paymentStatus || 'TO BE PAID';
+
+                    totalAmount += paymentAmount;
+
+                    if (paymentStatus !== 'PAID') {
+                        toBePaidAmount += paymentAmount;
+                    }
+                });
+
+                resolve({ totalAmount, toBePaidAmount });
+            })
+            .catch(error => {
+                resolve({ totalAmount: 0, toBePaidAmount: 0 });
+            });
+    });
 }
 
 // Update stylist codes dropdown for customer form
@@ -2560,7 +2710,7 @@ function loadPaymentsTable() {
     const tableBody = document.getElementById('paymentsTableBody');
     if (!tableBody) return;
 
-    tableBody.innerHTML = '<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading payments...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading payments...</td></tr>';
 
     if (firebaseAvailable) {
         database.ref('customers').once('value').then(snapshot => {
@@ -2570,7 +2720,7 @@ function loadPaymentsTable() {
             tableBody.innerHTML = '';
 
             if (customersList.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No payment records yet.</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No payment records yet.</td></tr>';
                 return;
             }
 
@@ -2587,8 +2737,7 @@ function loadPaymentsTable() {
                             <tr>
                                 <td>${new Date(customer.registrationDate || Date.now()).toLocaleDateString()}</td>
                                 <td>${customer.stylistName || 'N/A'}</td>
-                                <td>${customer.customerName || 'Not Provided'}</td>
-                                <td>Hair Braiding</td>
+                                <td>${key}</td>
                                 <td><strong>₦${paymentAmount.toLocaleString()}</strong></td>
                                 <td><span class="badge bg-${statusClass}">${statusText}</span></td>
                                 <td>${new Date(customer.paymentDate || '').toLocaleDateString()}</td>
@@ -2600,10 +2749,10 @@ function loadPaymentsTable() {
             // Update payment statistics
             updatePaymentStats(customersList);
         }).catch(error => {
-            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error loading payment records</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading payment records</td></tr>';
         });
     } else {
-        tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-warning">Firebase not available</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-warning">Firebase not available</td></tr>';
     }
 }
 
@@ -2794,7 +2943,8 @@ function updateStylistStats() {
 function filterStylists() {
     const searchTerm = document.getElementById('stylistSearch').value.toLowerCase();
     const locationFilter = document.getElementById('locationFilter').value;
-    const dateFilter = document.getElementById('stylistDateFilter').value;
+    const fromDateFilter = document.getElementById('stylistFromDate').value;
+    const toDateFilter = document.getElementById('stylistToDate').value;
     const tableRows = document.querySelectorAll('#stylistsTableBody tr');
 
     let visibleCount = 0;
@@ -2825,14 +2975,27 @@ function filterStylists() {
         // Location filter
         const matchesLocation = !locationFilter || location === locationFilter;
 
-        // Date filter
+        // Date range filter
         let matchesDate = true;
-        if (dateFilter) {
-            const filterDate = new Date(dateFilter);
-            // Compare dates (ignoring time)
+        if (fromDateFilter || toDateFilter) {
             const regDateOnly = new Date(regDate.getFullYear(), regDate.getMonth(), regDate.getDate());
-            const filterDateOnly = new Date(filterDate.getFullYear(), filterDate.getMonth(), filterDate.getDate());
-            matchesDate = regDateOnly.getTime() === filterDateOnly.getTime();
+            regDateOnly.setHours(0, 0, 0, 0);
+
+            if (fromDateFilter && toDateFilter) {
+                const fromDate = new Date(fromDateFilter);
+                fromDate.setHours(0, 0, 0, 0);
+                const toDate = new Date(toDateFilter);
+                toDate.setHours(0, 0, 0, 0);
+                matchesDate = regDateOnly.getTime() >= fromDate.getTime() && regDateOnly.getTime() <= toDate.getTime();
+            } else if (fromDateFilter) {
+                const fromDate = new Date(fromDateFilter);
+                fromDate.setHours(0, 0, 0, 0);
+                matchesDate = regDateOnly.getTime() >= fromDate.getTime();
+            } else if (toDateFilter) {
+                const toDate = new Date(toDateFilter);
+                toDate.setHours(0, 0, 0, 0);
+                matchesDate = regDateOnly.getTime() <= toDate.getTime();
+            }
         }
 
         const isVisible = matchesSearch && matchesLocation && matchesDate;
@@ -3653,9 +3816,9 @@ function initializeEnhancedStylistForm() {
                     if (snapshot.exists()) {
                         snapshot.forEach(child => {
                             const data = child.val();
-                            if (data.bankAccountNumber === bank && data.bankName === bankName) {
-                                duplicateBank = true;
-                            }
+                            // if (data.bankAccountNumber === bank && data.bankName === bankName) {
+                            //     duplicateBank = true;
+                            // }
                         });
                     }
 
@@ -4167,12 +4330,13 @@ function updateLocationSummaryTable(locationCounts) {
                 const locationCustomers = customersArray.filter(customer =>
                     customer.stylistLocation === location
                 );
+                // console.log(`Location ${location}: Customers data:`, locationCustomers);
 
                 // Get stylists for this location
                 const locationStylists = stylistsArray.filter(stylist =>
                     stylist.location === location
                 );
-
+                // console.log(`Processing location: ${location}`, locationStylists);
                 // console.log(`Location ${location}: ${locationCustomers.length} customers, ${locationStylists.length} stylists`);
 
                 // Calculate actual braiding completed (customer count for this location)
@@ -4181,14 +4345,24 @@ function updateLocationSummaryTable(locationCounts) {
                 // Calculate days since first stylist registration in this location
                 let days = 0;
                 if (locationStylists.length > 0) {
-                    const registrationDates = locationStylists
-                        .map(stylist => new Date(stylist.registrationDate || stylist.timestamp))
+                    // const registrationDates = locationStylists
+                    //     .map(stylist => new Date(stylist.registrationDate || stylist.timestamp))
+                    //     .filter(date => !isNaN(date));
+                    const registrationDates = locationCustomers
+                        .map(customer => new Date(customer.registrationDate || customer.timestamp))
                         .filter(date => !isNaN(date));
+                    // console.log(`Location ${location}: Registration dates:`, registrationDates);
 
                     if (registrationDates.length > 0) {
-                        const earliestDate = new Date(Math.min(...registrationDates));
-                        const today = new Date();
-                        days = Math.ceil((today - earliestDate) / (1000 * 60 * 60 * 24));
+                        // Count unique dates (ignoring time)
+                        const uniqueDays = new Set(
+                            registrationDates.map(date => {
+                                const d = new Date(date);
+                                d.setHours(0, 0, 0, 0);
+                                return d.getTime();
+                            })
+                        );
+                        days = uniqueDays.size;
                     }
                 }
 
@@ -4626,12 +4800,14 @@ function showSection(sectionId) {
     if (targetSection) {
         targetSection.style.display = 'block';
 
-        // Load data based on section
+        // Clear all filters when switching sections
         switch (sectionId) {
             case 'stylists':
+                clearFilters();
                 loadStylists();
                 break;
             case 'customers':
+                clearCustomerFilters();
                 loadCustomers();
                 break;
             case 'payment-request':
@@ -6628,7 +6804,8 @@ function filterCustomers() {
     const searchTerm = document.getElementById('customerSearch').value.toLowerCase();
     const locationFilter = document.getElementById('customerLocationFilter').value;
     const stylistFilter = document.getElementById('customerStylistFilter').value;
-    const dateFilter = document.getElementById('customerDate').value;
+    const fromDateFilter = document.getElementById('customerFromDate').value;
+    const toDateFilter = document.getElementById('customerToDate').value;
 
     const table = document.getElementById('customersTable');
     const rows = table.querySelectorAll('tbody tr');
@@ -6647,40 +6824,100 @@ function filterCustomers() {
     rows.forEach(row => {
         if (row.cells.length === 1) return; // Skip "no data" rows
 
-        const customerName = row.cells[1].textContent.toLowerCase();
-        const location = row.cells[3].textContent.toLowerCase();
-        const stylistCode = row.cells[3].textContent;
         const tokenNo = row.cells[0].textContent.toLowerCase();
-        const registrationText = row.cells[4].textContent;
+        const customerName = row.cells[1].textContent.toLowerCase();
+        const stylistCode = row.cells[2].textContent;
+        const registrationText = row.cells[3].textContent;
 
         const matchesSearch = customerName.includes(searchTerm) || tokenNo.includes(searchTerm);
-        const matchesLocation = !locationFilter || location.includes(locationFilter.toLowerCase());
+        const matchesLocation = !locationFilter || stylistCode.toLowerCase().includes(locationFilter.toLowerCase());
         const matchesStylist = !stylistFilter || stylistCode.includes(stylistFilter);
 
         let matchesDate = true;
-        if (dateFilter) {
+        if (fromDateFilter || toDateFilter) {
+            console.log('Date filters applied:', { fromDateFilter, toDateFilter });
+            console.log('Registration text:', registrationText);
+
             // Try multiple date formats: MM/DD/YYYY, DD/MM/YYYY, M/D/YYYY, etc.
             const dateMatch = registrationText.match(/\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/);
+            console.log('Date match found:', dateMatch);
+
             if (dateMatch) {
                 try {
                     // Parse the matched date string
                     const dateParts = dateMatch[0].split(/[\/\-\.]/);
                     let regDate;
 
-                    // Try to create date object - handle both MM/DD/YYYY and DD/MM/YYYY
+                    console.log('Date parts:', dateParts);
+
+                    // Try different date formats to handle both MM/DD/YYYY and DD/MM/YYYY
                     if (dateParts[2].length === 4) {
-                        regDate = new Date(dateParts[2], dateParts[0] - 1, dateParts[1]); // MM/DD/YYYY
+                        // Try MM/DD/YYYY first
+                        regDate = new Date(dateParts[2], dateParts[0] - 1, dateParts[1]);
+
+                        // If the date is invalid, try DD/MM/YYYY
+                        if (isNaN(regDate.getTime()) || dateParts[0] > 12) {
+                            regDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]); // DD/MM/YYYY
+                        }
                     } else {
-                        regDate = new Date('20' + dateParts[2], dateParts[0] - 1, dateParts[1]); // MM/DD/YY
+                        // Try MM/DD/YY first
+                        regDate = new Date('20' + dateParts[2], dateParts[0] - 1, dateParts[1]);
+
+                        // If the date is invalid, try DD/MM/YY
+                        if (isNaN(regDate.getTime()) || dateParts[0] > 12) {
+                            regDate = new Date('20' + dateParts[2], dateParts[1] - 1, dateParts[0]); // DD/MM/YY
+                        }
                     }
 
-                    const filterDate = new Date(dateFilter);
-                    matchesDate = regDate.toDateString() === filterDate.toDateString();
+                    console.log('Parsed registration date:', regDate);
+
+                    // Check if date is valid
+                    if (isNaN(regDate.getTime())) {
+                        console.log('Invalid date, skipping date filter');
+                        matchesDate = true; // Don't filter out if we can't parse the date
+                    } else {
+                        const regDateOnly = new Date(regDate.getFullYear(), regDate.getMonth(), regDate.getDate());
+                        regDateOnly.setHours(0, 0, 0, 0);
+
+                        if (fromDateFilter && toDateFilter) {
+                            const fromDate = new Date(fromDateFilter);
+                            fromDate.setHours(0, 0, 0, 0);
+                            const toDate = new Date(toDateFilter);
+                            toDate.setHours(0, 0, 0, 0);
+                            matchesDate = regDateOnly.getTime() >= fromDate.getTime() && regDateOnly.getTime() <= toDate.getTime();
+                            console.log('Date range check:', {
+                                regDate: regDateOnly.toDateString(),
+                                fromDate: fromDate.toDateString(),
+                                toDate: toDate.toDateString(),
+                                matchesDate
+                            });
+                        } else if (fromDateFilter) {
+                            const fromDate = new Date(fromDateFilter);
+                            fromDate.setHours(0, 0, 0, 0);
+                            matchesDate = regDateOnly.getTime() >= fromDate.getTime();
+                            console.log('From date check:', {
+                                regDate: regDateOnly.toDateString(),
+                                fromDate: fromDate.toDateString(),
+                                matchesDate
+                            });
+                        } else if (toDateFilter) {
+                            const toDate = new Date(toDateFilter);
+                            toDate.setHours(0, 0, 0, 0);
+                            matchesDate = regDateOnly.getTime() <= toDate.getTime();
+                            console.log('To date check:', {
+                                regDate: regDateOnly.toDateString(),
+                                toDate: toDate.toDateString(),
+                                matchesDate
+                            });
+                        }
+                    }
                 } catch (e) {
-                    matchesDate = false;
+                    console.log('Date parsing error:', e);
+                    matchesDate = true; // Don't filter out if we can't parse the date
                 }
             } else {
-                matchesDate = false;
+                console.log('No date match found in registration text');
+                matchesDate = true; // Don't filter out if no date found
             }
         }
 
@@ -6733,7 +6970,18 @@ function filterCustomers() {
     document.getElementById('stylistSearch').value = '';
     document.getElementById('locationFilter').value = '';
     document.getElementById('statusFilter').value = '';
-    document.getElementById('customerDate').value = '';
+    document.getElementById('stylistFromDate').value = '';
+    document.getElementById('stylistToDate').value = '';
+
+    // Reset date restrictions
+    const stylistFromDate = document.getElementById('stylistFromDate');
+    const stylistToDate = document.getElementById('stylistToDate');
+    if (stylistFromDate) {
+        stylistFromDate.removeAttribute('max');
+    }
+    if (stylistToDate) {
+        stylistToDate.removeAttribute('min');
+    }
 
     // Show all rows
     const table = document.getElementById('stylistsTable');
@@ -6752,7 +7000,21 @@ function clearCustomerFilters() {
     document.getElementById('customerSearch').value = '';
     document.getElementById('customerLocationFilter').value = '';
     document.getElementById('customerStylistFilter').value = '';
-    document.getElementById('customerDate').value = '';
+    document.getElementById('customerFromDate').value = '';
+    document.getElementById('customerToDate').value = '';
+
+    // Reset date restrictions
+    const customerFromDate = document.getElementById('customerFromDate');
+    const customerToDate = document.getElementById('customerToDate');
+    if (customerFromDate) {
+        customerFromDate.removeAttribute('max');
+    }
+    if (customerToDate) {
+        customerToDate.removeAttribute('min');
+    }
+
+    // Repopulate stylist filter with all stylists
+    populateCustomerStylistFilter('');
 
     // Show all rows
     const table = document.getElementById('customersTable');
@@ -6768,16 +7030,37 @@ function clearCustomerFilters() {
 }
 
 // Populate stylist filter dropdown
-function populateCustomerStylistFilter() {
+function populateCustomerStylistFilter(locationFilter = '') {
     const stylistFilter = document.getElementById('customerStylistFilter');
+    console.log('Populating stylist filter with location:', locationFilter);
+    console.log('stylistsDataGlobal:', stylistsDataGlobal);
+
     if (stylistFilter && stylistsDataGlobal) {
         stylistFilter.innerHTML = '<option value="">All Stylists</option>';
-        const uniqueStylists = [...new Set(stylistsDataGlobal.map(s => s.stylistCode))].sort();
+
+        // Filter stylists by location if location filter is provided
+        let filteredStylists = stylistsDataGlobal;
+        if (locationFilter) {
+            filteredStylists = stylistsDataGlobal.filter(s => {
+                console.log('Checking stylist:', s.stylistCode, 'location:', s.location);
+                return s.location && s.location.toLowerCase() === locationFilter.toLowerCase();
+            });
+            console.log('Filtered stylists:', filteredStylists);
+        }
+
+        const uniqueStylists = [...new Set(filteredStylists.map(s => s.stylistCode))]
+            .filter(code => code)
+            .sort();
+
+        console.log('Unique stylists to add:', uniqueStylists);
+
         uniqueStylists.forEach(code => {
-            if (code) {
-                stylistFilter.innerHTML += `<option value="${code}">${code}</option>`;
-            }
+            stylistFilter.innerHTML += `<option value="${code}">${code}</option>`;
         });
+
+        console.log('Updated stylist dropdown HTML:', stylistFilter.innerHTML);
+    } else {
+        console.log('stylistFilter or stylistsDataGlobal not available');
     }
 }
 
