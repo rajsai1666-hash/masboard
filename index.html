@@ -1567,6 +1567,27 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
+                                    <label for="customerStylistMobile" class="form-label">Stylist Mobile No</label>
+                                    <input type="text" name="customerstylistMobile" id="customerStylistMobile"
+                                        class="form-control" readonly>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="customerStylistBankName" class="form-label">Stylist Bank Name</label>
+                                    <input type="text" name="customerstylistBankName" id="customerStylistBankName"
+                                        class="form-control" readonly>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="customerStylistAccountNo" class="form-label">Stylist Account No</label>
+                                    <input type="text" name="customerstylistAccountNo" id="customerStylistAccountNo"
+                                        class="form-control" readonly>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
                                     <label for="customerTokenNo" class="form-label">Token No.</label>
                                     <input type="text" name="customerTokenNo" class="form-control" id="customerTokenNo"
                                         pattern="[A-Za-z0-9\-]+" title="Only letters, numbers and hyphens allowed"
@@ -1792,12 +1813,13 @@
                                             <th id="sTotalAmount" class="p-1">Total Amount <i
                                                     class="fas fa-sort"></i><br><small style="font-size: 8px;">(Paid +
                                                     Unpaid)</small></th>
-                                            <!-- <th>Actions</th> -->
+                                            <th id="sActions" class="admin-only-column" style="display: none;">Actions
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody id="stylistsTableBody">
                                         <tr>
-                                            <td colspan="8" class="text-center text-muted">Loading stylists from
+                                            <td colspan="9" class="text-center text-muted">Loading stylists from
                                                 Firebase...</td>
                                         </tr>
                                     </tbody>
@@ -2203,7 +2225,7 @@
                                             <th>Payment</th>
                                             <th>Account Details</th>
                                             <th>Payment Status</th>
-                                            <!-- <th>Actions</th> -->
+                                            <th class="admin-only-column" style="display: none;">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="customersTableBody">
