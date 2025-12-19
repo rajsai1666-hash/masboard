@@ -6404,10 +6404,12 @@ function loadPaymentRequestsData() {
                 stylistsSnapshot.forEach(child => {
                     const stylist = child.val();
                     if (stylist.stylistCode) {
+                        console.log("Stylist Info:", stylist);
                         stylists[stylist.stylistCode] = {
                             bankName: stylist.bankName || '',
-                            bankCode: stylist.bankAccountNumber || '',
-                            fullName: stylist.stylistName || 'Unknown'
+                            bankCode: stylist.bankAccountNumber || '',//beneficiaryName
+                            fullName: stylist.stylistName || 'Unknown',
+                            beneficiaryName: stylist.beneficiaryName || 'Unknown'
                         };
                     }
                 });
@@ -6427,10 +6429,10 @@ function loadPaymentRequestsData() {
                     if ((customer.stylistCode && isPending)) {//customer.tokenNo ||
                         // console.log("Payment Status:", isPending, customer.stylistCode);
                         const stylistInfo = stylists[customer.stylistCode] || {}
-
+                        
                         customers.push({
                             tokenNo: customer.tokenNo,
-                            beneficiaryName: stylistInfo.fullName || 'Unknown',
+                            beneficiaryName: stylistInfo.beneficiaryName || 'Unknown',
                             bankCode: stylistInfo.bankCode || '',
                             bankName: stylistInfo.bankName || 'N/A',
                             amount: parseFloat(customer.totalPayment || customer.amount || 0),
@@ -6541,7 +6543,7 @@ function displayPaymentRequestsData() {
         row.innerHTML = `
                     <td>
                         <div><strong>${item.beneficiaryName}</strong></div>
-                        <small class="text-muted">Customer: ${item.customerData?.customerName}</small>
+                        <small class="text-muted">Token No: ${item.customerData?.tokenNo}</small>
                     </td>
                     <td><strong>${item.bankName.toLocaleString()}</strong></td>
                     <td>${item.bankCode || '<em class="text-muted">Not specified</em>'}</td>
