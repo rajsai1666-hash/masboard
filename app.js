@@ -933,12 +933,47 @@ function applySectionPermissions() {
             console.log('🔄 Fallback: Dashboard section shown');
         }
     }
+
+    // Apply admin visibility after permissions are set
+    applyAdminOnlyVisibility();
+}
+
+// Function to show/hide admin-only columns and disable hidden sidebar buttons
+function applyAdminOnlyVisibility() {
+    if (!currentUser) return;
+
+    // Check if user is admin or master admin - more comprehensive check
+    const isAdmin = currentUser.role === 'admin' ||
+        currentUser.role === 'superadmin' ||
+        currentUser.isMaster ||
+        currentUser.role === 'master*admin';
+
+    // Show/hide admin-only columns
+    const adminColumns = document.querySelectorAll('.admin-only-column');
+    adminColumns.forEach(col => {
+        col.style.display = isAdmin ? 'table-cell' : 'none';
+    });
+
+    // Disable sidebar buttons that are hidden
+    document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+        const displayStyle = window.getComputedStyle(link).display;
+        if (displayStyle === 'none') {
+            link.style.pointerEvents = 'none';
+            link.style.opacity = '0.5';
+            link.style.cursor = 'not-allowed';
+        } else {
+            link.style.pointerEvents = '';
+            link.style.opacity = '';
+            link.style.cursor = '';
+        }
+    });
 }
 
 // Updated show all sections with access control
 function showAllSections() {
     // This function is now handled by applySectionPermissions
     applySectionPermissions();
+    applyAdminOnlyVisibility();
 }
 
 // Show login page and hide dashboard
@@ -1923,7 +1958,7 @@ function loadStylists() {
             updateStylistCodesDropdown(stylistsList);
 
             if (stylistsList.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No stylists registered yet</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No stylists registered yet</td></tr>';
                 return;
             }
 
@@ -1956,7 +1991,7 @@ function loadStylists() {
 
                     const tokenCount = stylistTokenCounts[data.stylistCode] || 0;
 
-                    return `
+                    const rowHtml = `
                             <tr data-stylist="${JSON.stringify(stylistForTable).replace(/"/g, '&quot;')}">
                                 <td>
                                     <div class="text-center">
@@ -1995,9 +2030,28 @@ function loadStylists() {
                                 <td>
                                     ₦<span class="total-amount" data-stylist-code="${data.stylistCode}">...</span>
                                 </td>
+                                <td class="admin-only-column action-column" style="display: none;">
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-sm btn-outline-warning edit-stylist-btn" data-stylist-key="${key}" title="Edit Stylist">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        
+                                    </div>
+                                </td>
                             </tr>
                         `;
+                    return rowHtml;
                 }).join('');
+
+                // <button type="button" class="btn btn-sm btn-outline-danger delete-stylist-btn" data-stylist-key="${key}" title="Delete Stylist">
+                //     <i class="fas fa-trash"></i>
+                // </button>
+
+                // Apply admin visibility immediately after HTML is set
+                applyAdminOnlyVisibility();
+
+                // Attach action listeners after HTML is populated
+                attachStylistActionListeners();
 
                 // Also update the stylistsData array to include token counts for filtering
                 stylistsData = stylistsList.map(([key, data]) => ({
@@ -2078,10 +2132,21 @@ function loadStylists() {
                                 <td>
                                     ₦<span class="total-amount" data-stylist-code="${data.stylistCode}">...</span>
                                 </td>
+                                <td class="admin-only-column" style="display: none;">
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-outline-warning edit-stylist-btn" data-stylist-key="${key}" title="Edit Stylist">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        
+                                    </div>
+                                </td>
                             </tr>
                         `;
                 }).join('');
 
+                // <button class="btn btn-sm btn-outline-danger delete-stylist-btn" data-stylist-key="${key}" title="Delete Stylist">
+                // <i class="fas fa-trash"></i>
+                //                         </button >
                 // Update earnings for fallback stylists too
                 stylistsList.forEach(([key, data]) => {
                     getEarningsForStylist(data.stylistCode).then(earnings => {
@@ -2096,7 +2161,7 @@ function loadStylists() {
         }); // Close database.ref('stylists').once callback
 
     } else {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">🚫 Firebase connection required. Please check your connection and refresh.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">🚫 Firebase connection required. Please check your connection and refresh.</td></tr>';
     }
 }
 
@@ -2223,6 +2288,25 @@ function initializeCustomerForm() {
                     if (stylistNameInput) stylistNameInput.value = name || '';
                     if (stylistLocationInput) stylistLocationInput.value = location || '';
 
+                    // Fetch complete stylist data from Firebase for bank details and mobile
+                    if (firebaseAvailable && v) {
+                        database.ref('stylists').orderByChild('stylistCode').equalTo(v).once('value', (snapshot) => {
+                            const stylistData = snapshot.val();
+                            if (stylistData) {
+                                const stylistKey = Object.keys(stylistData)[0];
+                                const stylist = stylistData[stylistKey];
+
+                                const mobileInput = document.getElementById('customerStylistMobile');
+                                const bankNameInput = document.getElementById('customerStylistBankName');
+                                const accountNoInput = document.getElementById('customerStylistAccountNo');
+
+                                if (mobileInput) mobileInput.value = stylist.phoneNumber || '';
+                                if (bankNameInput) bankNameInput.value = stylist.bankName || '';
+                                if (accountNoInput) accountNoInput.value = stylist.bankAccountNumber || '';
+                            }
+                        });
+                    }
+
                     this.style.border = '';
                     this.setCustomValidity('');
                 } else {
@@ -2233,6 +2317,25 @@ function initializeCustomerForm() {
                             isValidOption = true;
                             if (stylistNameInput) stylistNameInput.value = stylist.stylistName || '';
                             if (stylistLocationInput) stylistLocationInput.value = stylist.stylistLocation || '';
+
+                            // Fetch complete stylist data from Firebase for bank details and mobile
+                            if (firebaseAvailable && v) {
+                                database.ref('stylists').orderByChild('stylistCode').equalTo(v).once('value', (snapshot) => {
+                                    const stylistData = snapshot.val();
+                                    if (stylistData) {
+                                        const stylistKey = Object.keys(stylistData)[0];
+                                        const stylistDetails = stylistData[stylistKey];
+
+                                        const mobileInput = document.getElementById('customerStylistMobile');
+                                        const bankNameInput = document.getElementById('customerStylistBankName');
+                                        const accountNoInput = document.getElementById('customerStylistAccountNo');
+
+                                        if (mobileInput) mobileInput.value = stylistDetails.phoneNumber || '';
+                                        if (bankNameInput) bankNameInput.value = stylistDetails.bankName || '';
+                                        if (accountNoInput) accountNoInput.value = stylistDetails.bankAccountNumber || '';
+                                    }
+                                });
+                            }
 
                             this.style.border = '';
                             this.setCustomValidity('');
@@ -2281,6 +2384,15 @@ function initializeCustomerForm() {
                 showAlert('Please Enter registered Stylist code', 'warning');
                 if (stylistNameInput) stylistNameInput.value = '';
                 if (stylistLocationInput) stylistLocationInput.value = '';
+
+                // Clear new fields
+                const mobileInput = document.getElementById('customerStylistMobile');
+                const bankNameInput = document.getElementById('customerStylistBankName');
+                const accountNoInput = document.getElementById('customerStylistAccountNo');
+                if (mobileInput) mobileInput.value = '';
+                if (bankNameInput) bankNameInput.value = '';
+                if (accountNoInput) accountNoInput.value = '';
+
                 const cstcodemsg = document.getElementById('cstcodemsg');
                 if (cstcodemsg) {
                     cstcodemsg.textContent = 'Please Enter registered Stylist code';
@@ -2564,6 +2676,9 @@ function proceedWithCustomerSubmission(form, formData, submitBtn) {
         stylistCode: formData.get('stylishCode'),
         stylistName: formData.get('stylishName'),
         stylistLocation: formData.get('customerstylistLocation'),
+        stylistMobile: formData.get('customerstylistMobile') || '',
+        stylistBankName: formData.get('customerstylistBankName') || '',
+        stylistAccountNo: formData.get('customerstylistAccountNo') || '',
         customerName: formData.get('customerName') || '',
         customerNumber: formData.get('customerNumber') || '',
         customerEmail: formData.get('customerEmail') || '',
@@ -2898,6 +3013,355 @@ function refreshStylists() {
     showAlert('Stylists list refreshed!', 'info');
 }
 
+// Attach event listeners for stylist action buttons
+function attachStylistActionListeners() {
+    // Remove old listeners by cloning elements
+    document.querySelectorAll('.edit-stylist-btn').forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+    });
+
+    document.querySelectorAll('.delete-stylist-btn').forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+    });
+
+    // Add edit listeners
+    document.querySelectorAll('.edit-stylist-btn').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const stylistKey = this.getAttribute('data-stylist-key');
+            if (stylistKey) {
+                editStylist(stylistKey);
+            }
+        });
+    });
+
+    // Add delete listeners
+    document.querySelectorAll('.delete-stylist-btn').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const stylistKey = this.getAttribute('data-stylist-key');
+            if (stylistKey) {
+                deleteStylist(stylistKey);
+            }
+        });
+    });
+}
+
+// Attach event listeners for token count action buttons
+function attachTokenActionListeners() {
+    // Remove old listeners if any
+    document.querySelectorAll('.delete-token-btn').forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+    });
+
+    // Add delete listeners
+    document.querySelectorAll('.delete-token-btn').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const customerKey = this.getAttribute('data-customer-key');
+            if (customerKey) {
+                deleteTokenCount(customerKey);
+            }
+        });
+    });
+}
+
+// Edit stylist function
+function editStylist(stylistKey) {
+    if (!currentUser) {
+        showAlert('Please login to perform this action', 'danger');
+        return;
+    }
+
+    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.isMaster || currentUser.role.includes('master') || currentUser.role.includes('admin');
+    if (!isAdmin) {
+        showAlert('Only admins can edit stylists', 'danger');
+        return;
+    }
+
+    if (!firebaseAvailable) {
+        showAlert('Firebase connection required', 'danger');
+        return;
+    }
+
+    database.ref('stylists/' + stylistKey).once('value', (snapshot) => {
+        const stylist = snapshot.val();
+        if (!stylist) {
+            showAlert('Stylist not found', 'danger');
+            return;
+        }
+
+        showEditStylistModal(stylistKey, stylist);
+    }).catch(error => {
+        showAlert('Error loading stylist data', 'danger');
+    });
+}
+
+// Show edit stylist modal
+function showEditStylistModal(stylistKey, stylist) {
+    const safeStylestId = escapeHtml(stylistKey);
+    const safeStylistName = escapeHtml(stylist.stylistName || '');
+    const safePhoneNumber = escapeHtml(stylist.phoneNumber || '');
+    const safeEmail = escapeHtml(stylist.email || '');
+    const safeLocation = escapeHtml(stylist.location || '');
+    const safeBankName = escapeHtml(stylist.bankName || '');
+    const safeBankAccount = escapeHtml(stylist.bankAccountNumber || '');
+    const safeBeneficiaryName = escapeHtml(stylist.beneficiaryName || '');
+    const safeStylistCode = escapeHtml(stylist.stylistCode || '');
+    const safeStatus = escapeHtml(stylist.status || 'active');
+
+    const modalHTML = `
+        <div class="modal fade" id="editStylistModal" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Stylist</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editStylistForm" novalidate>
+                            <input type="hidden" id="editStylistId" value="${safeStylestId}">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Stylist Name *</label>
+                                    <input type="text" class="form-control" id="editStylistName" value="${safeStylistName}" required minlength="3">
+                                    <div class="invalid-feedback">Name must be at least 3 characters.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Phone Number *</label>
+                                    <input type="tel" class="form-control" id="editStylistPhone" value="${safePhoneNumber}" required pattern="0[789][0-9]{9}" maxlength="11">
+                                    <div class="invalid-feedback">Phone number must be 11 digits starting with 07, 08, or 09.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="editStylistEmail" value="${safeEmail}">
+                                    <div class="invalid-feedback">Please enter a valid email.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Stylist Code *</label>
+                                    <input type="text" class="form-control" id="editStylistCode" value="${safeStylistCode}" required>
+                                    <div class="invalid-feedback">Stylist code is required.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Location *</label>
+                                    <select class="form-select" id="editStylistLocation" required>
+                                        <option value="">Select Location</option>
+                                        <option value="AKURE" ${safeLocation === 'AKURE' ? 'selected' : ''}>AKURE</option>
+                                        <option value="IBADAN" ${safeLocation === 'IBADAN' ? 'selected' : ''}>IBADAN</option>
+                                        <option value="ADO-EKITI" ${safeLocation === 'ADO-EKITI' ? 'selected' : ''}>ADO-EKITI</option>
+                                        <option value="ILORIN" ${safeLocation === 'ILORIN' ? 'selected' : ''}>ILORIN</option>
+                                        <option value="OSOGBO" ${safeLocation === 'OSOGBO' ? 'selected' : ''}>OSOGBO</option>
+                                    </select>
+                                    <div class="invalid-feedback">Please select a location.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Status *</label>
+                                    <select class="form-select" id="editStylistStatus" required>
+                                        <option value="active" ${safeStatus === 'active' ? 'selected' : ''}>Active</option>
+                                        <option value="inactive" ${safeStatus === 'inactive' ? 'selected' : ''}>Inactive</option>
+                                        <option value="blocked" ${safeStatus === 'blocked' ? 'selected' : ''}>Blocked</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Bank Name</label>
+                                    <input type="text" class="form-control" id="editStylistBankName" value="${safeBankName}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Bank Account Number</label>
+                                    <input type="text" class="form-control" id="editStylistBankAccount" value="${safeBankAccount}">
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">Beneficiary Name</label>
+                                    <input type="text" class="form-control" id="editStylistBeneficiary" value="${safeBeneficiaryName}">
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="saveStylistChanges()">
+                            <i class="fas fa-save me-2"></i>Save Changes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existingModal = document.getElementById('editStylistModal');
+    if (existingModal) existingModal.remove();
+
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // Add real-time validation
+    const form = document.getElementById('editStylistForm');
+    form.querySelectorAll('input, select').forEach(field => {
+        field.addEventListener('blur', () => validateEditStylistField(field));
+        field.addEventListener('input', () => validateEditStylistField(field));
+    });
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('editStylistModal'));
+    modal.show();
+}
+
+// Validate edit stylist form field
+function validateEditStylistField(field) {
+    if (field.checkValidity()) {
+        field.classList.remove('is-invalid');
+        field.classList.add('is-valid');
+    } else {
+        field.classList.remove('is-valid');
+        field.classList.add('is-invalid');
+    }
+}
+
+// Save stylist changes
+async function saveStylistChanges() {
+    const form = document.getElementById('editStylistForm');
+    form.classList.add('was-validated');
+
+    if (!form.checkValidity()) {
+        showAlert('Please fill all required fields correctly', 'danger');
+        return;
+    }
+
+    const stylistId = document.getElementById('editStylistId').value;
+    const stylistName = document.getElementById('editStylistName').value.trim();
+    const phoneNumber = document.getElementById('editStylistPhone').value.trim();
+    const email = document.getElementById('editStylistEmail').value.trim();
+    const stylistCode = document.getElementById('editStylistCode').value.trim();
+    const location = document.getElementById('editStylistLocation').value;
+    const status = document.getElementById('editStylistStatus').value;
+    const bankName = document.getElementById('editStylistBankName').value.trim();
+    const bankAccount = document.getElementById('editStylistBankAccount').value.trim();
+    const beneficiaryName = document.getElementById('editStylistBeneficiary').value.trim();
+
+    const updatedStylistData = {
+        stylistName: stylistName,
+        phoneNumber: phoneNumber,
+        email: email,
+        stylistCode: stylistCode,
+        location: location,
+        status: status,
+        bankName: bankName,
+        bankAccountNumber: bankAccount,
+        beneficiaryName: beneficiaryName,
+        lastModified: new Date().toISOString(),
+        modifiedBy: currentUser.fullName || currentUser.username || 'Admin'
+    };
+
+    try {
+        await database.ref('stylists/' + stylistId).update(updatedStylistData);
+        showAlert('Stylist updated successfully!', 'success');
+
+        // Close modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editStylistModal'));
+        modal.hide();
+
+        // Refresh stylists list
+        loadStylists();
+
+    } catch (error) {
+        showAlert('Failed to update stylist. Please try again.', 'danger');
+    }
+}
+
+// Delete stylist function
+function deleteStylist(stylistKey) {
+    if (!currentUser) {
+        showAlert('Please login to perform this action', 'danger');
+        return;
+    }
+
+    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.isMaster;
+    if (!isAdmin) {
+        showAlert('Only admins can delete stylists', 'danger');
+        return;
+    }
+
+    if (!firebaseAvailable) {
+        showAlert('Firebase connection required', 'danger');
+        return;
+    }
+
+    // Get stylist details first
+    database.ref('stylists/' + stylistKey).once('value', (snapshot) => {
+        const stylist = snapshot.val();
+        if (!stylist) {
+            showAlert('Stylist not found', 'danger');
+            return;
+        }
+
+        if (confirm(`Are you sure you want to delete stylist ${stylist.stylistName} (${stylist.stylistCode})? This action cannot be undone.`)) {
+            database.ref('stylists/' + stylistKey).remove()
+                .then(() => {
+                    showAlert('Stylist deleted successfully', 'success');
+                    loadStylists();
+                    updateDashboardStats(); // Refresh dashboard
+                    loadCustomers();
+                })
+                .catch(error => {
+                    console.error('Error deleting stylist:', error);
+                    showAlert('Error deleting stylist: ' + error.message, 'danger');
+                });
+        }
+    }).catch(error => {
+        console.error('Error loading stylist:', error);
+        showAlert('Error loading stylist data', 'danger');
+    });
+}
+
+// Delete token count function
+function deleteTokenCount(customerKey) {
+    if (!currentUser) {
+        showAlert('Please login to perform this action', 'danger');
+        return;
+    }
+
+    const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.isMaster;
+    if (!isAdmin) {
+        showAlert('Only admins can delete token counts', 'danger');
+        return;
+    }
+
+    if (!firebaseAvailable) {
+        showAlert('Firebase connection required', 'danger');
+        return;
+    }
+
+    // Get customer details first
+    database.ref('customers/' + customerKey).once('value', (snapshot) => {
+        const customer = snapshot.val();
+        if (!customer) {
+            showAlert('Token count record not found', 'danger');
+            return;
+        }
+
+        if (confirm(`Are you sure you want to delete token #${customer.tokenNo} for ${customer.stylistName}? This action cannot be undone.`)) {
+            database.ref('customers/' + customerKey).remove()
+                .then(() => {
+                    showAlert('Token count deleted successfully', 'success');
+                    loadCustomers();
+                    loadStylists(); // Refresh stylists to update token counts
+                    updateDashboardStats(); // Refresh dashboard
+                })
+                .catch(error => {
+                    console.error('Error deleting token count:', error);
+                    showAlert('Error deleting token count: ' + error.message, 'danger');
+                });
+        }
+    }).catch(error => {
+        console.error('Error loading token count:', error);
+        showAlert('Error loading token count data', 'danger');
+    });
+}
+
 // Helper function to calculate days since registration
 function getDaysSince(dateString) {
     const regDate = new Date(dateString);
@@ -3187,30 +3651,7 @@ function exportStylists() {
     });
 }
 
-function editStylist(index) {
-    const stylist = stylistsData[index];
-    if (confirm(`Edit stylist: ${stylist.name}?`)) {
-        // Simple edit - could be enhanced with a modal
-        const newName = prompt('Enter new name:', stylist.name);
-        const newPhone = prompt('Enter new phone:', stylist.phone);
-
-        if (newName && newPhone) {
-            stylistsData[index].name = newName;
-            stylistsData[index].phone = newPhone;
-            loadStylists();
-            showAlert('Stylist updated successfully!', 'success');
-        }
-    }
-}
-
-function deleteStylist(index) {
-    const stylist = stylistsData[index];
-    if (confirm(`Delete stylist: ${stylist.name}? This action cannot be undone.`)) {
-        stylistsData.splice(index, 1);
-        loadStylists();
-        showAlert('Stylist deleted successfully!', 'warning');
-    }
-}
+// Note: editStylist and deleteStylist functions are defined earlier in the file with Firebase integration
 
 function loadReportsData() {
     // Load revenue chart
@@ -4047,6 +4488,12 @@ function loadCustomers() {
 
             // Populate stylist filter dropdown
             populateCustomerStylistFilter();
+
+            // Apply admin-only column visibility after table is loaded
+            setTimeout(() => {
+                applyAdminOnlyVisibility();
+                attachTokenActionListeners();
+            }, 100);
         }).catch(error => {
         });
     }
@@ -4058,7 +4505,7 @@ function updateCustomerTable(customersList) {
     if (!tbody) return;
 
     if (customersList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan=\"7\" class=\"text-center text-muted\">No braiding registered yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan=\"8\" class=\"text-center text-muted\">No braiding registered yet</td></tr>';
         return;
     }
 
@@ -4106,9 +4553,20 @@ function updateCustomerTable(customersList) {
                                 <br>Status: <small class="text-muted">${data.bankStatus || ''}</small>
                             </div>
                         </td>
+                        <td class="admin-only-column action-column" style="display: none;">
+                            <button type="button" class="btn btn-sm btn-outline-danger delete-token-btn" data-customer-key="${key}" title="Delete Token">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
                     </tr>
                 `;
     }).join('');
+
+    // Apply admin visibility after table is populated
+    applyAdminOnlyVisibility();
+
+    // Attach token action listeners
+    attachTokenActionListeners();
 }
 // <td>
 //         <button class="btn btn-sm btn-outline-primary" onclick="viewCustomer('${key}')" title="View Details">
