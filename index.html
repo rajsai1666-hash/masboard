@@ -929,6 +929,23 @@
             }
         }
 
+        @media (max-width: 430px) {
+            #stylistReportTable,
+            #stylistReportTable th,
+            #stylistReportTable td {
+                font-size: 12px !important;
+                padding: 1px 2px !important;
+                white-space: normal !important;
+                min-width: unset !important;
+                word-break: break-word !important;
+            }
+            #stylistReportTable th,
+            #stylistReportTable td {
+                text-align: center !important;
+                align-content: center !important;
+            }
+        }
+
         /* Extra small devices (360px and below) */
         @media (max-width: 360px) {
             .content-area {
@@ -1895,11 +1912,11 @@
                                             <th class="text-center text-wrap align-content-center fw-900"
                                                 style="min-width:55px;">TOTAL STYLISTS</th>
                                             <th class="text-end align-content-center fw-900" id="stylistCounts"
-                                                style="min-width:100px;"></th>
+                                                style="text-align-last: center;"></th>
                                             <th class="text-center text-wrap align-content-center fw-900"
                                                 style="min-width:120px;">TOTAL TOKEN COUNTS</th>
                                             <th class="text-end align-content-center fw-900" id="toknCounts"
-                                                style="min-width:80px;"></th>
+                                                style="text-align-last: center;"></th>
                                         </tr>
                                     </thead>
                                     <thead class="table-dark">
@@ -1915,6 +1932,14 @@
                                             <td colspan="4" class="text-center text-muted">Loading all data...</td>
                                         </tr>
                                     </tbody>
+                                    <tfoot class="table-info">
+                                        <tr>
+                                            <th class="text-center text-wrap align-content-center fw-900" style="min-width:55px;">TOTAL STYLISTS</th>
+                                            <th class="text-end align-content-center fw-900" id="stylistCountsf" style="text-align-last: center;"></th>
+                                            <th class="text-center text-wrap align-content-center fw-900" style="min-width:120px;">TOTAL TOKEN COUNTS</th>
+                                            <th class="text-end align-content-center fw-900" id="toknCountsf" style="text-align-last: center;"></th>
+                                        </tr>
+                                    </tfoot>
                                 </table>
                             </div>
                             <style>
@@ -1940,18 +1965,21 @@
                     </div>
 
                     <!-- CSV Upload Modal -->
-                    <div class="modal fade" id="csvUploadModal" tabindex="-1">
+                    <div class="modal fade" id="csvUploadModal" tabindex="-1" aria-hidden="true" role="dialog"
+                        aria-labelledby="csvUploadModalTitle" aria-describedby="csvUploadModalDesc">
                         <div class="modal-dialog">
                             <div class="modal-content">
                                 <div class="modal-header">
-                                    <h5 class="modal-title">Upload CSV Payment Data</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    <h5 class="modal-title" id="csvUploadModalTitle">Upload CSV Payment Data</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                        aria-label="Close"></button>
                                 </div>
                                 <div class="modal-body">
                                     <div class="mb-3">
                                         <label for="csvFile" class="form-label">Select CSV File</label>
                                         <input type="file" class="form-control" id="csvFile" accept=".csv" required>
-                                        <div class="form-text">CSV should contain columns: Beneficiary Name,
+                                        <div class="form-text" id="csvUploadModalDesc">CSV should contain columns:
+                                            Beneficiary Name,
                                             Bank Code, Account Number, Amount, Narration (Transaction_ID)</div>
                                         <div class="form-text mt-2"><strong>Note:</strong> This will update payment
                                             statuses in the backend database by matching Unique IDs.</div>
