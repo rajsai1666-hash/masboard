@@ -89,6 +89,11 @@
             .sidebar {
                 max-height: 100vh !important;
             }
+
+            /* Hide Stylists section statistics cards on mobile */
+            #stylists .row.g-3.mb-4 {
+                display: none !important;
+            }
         }
 
         input,
@@ -125,6 +130,7 @@
             --accent: #EA4335;
             --light: #f8f9fa;
             --dark: #343a40;
+            --info: hwb(316 2% 5% / 0.905);
         }
 
         /* Login Page Styles */
@@ -611,6 +617,13 @@
             border-color: var(--dark) !important;
         }
 
+        .table-info th {
+            background-color: var(--info) !important;
+            color: white !important;
+            font-weight: 900 !important;
+            border-color: var(--info) !important;
+        }
+
         /* Enhanced form styling */
         .form-section .card {
             transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -775,7 +788,7 @@
             }
         }
 
-        @media (max-width: 576px) {
+        @media (max-width: 354px) {
             .content-area {
                 padding: 8px;
             }
@@ -1220,6 +1233,11 @@
                     <li class="nav-item">
                         <a class="nav-link" href="#stylists">
                             <i class="fas fa-users"></i> Stylists
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#stylist-report">
+                            <i class="fas fa-chart-line"></i> Stylist Report
                         </a>
                     </li>
                     <li class="nav-item">
@@ -1829,6 +1847,90 @@
                     </div>
                 </div>
 
+                <!-- Stylist Report Section -->
+                <div id="stylist-report" class="dashboard-section" style="display: none;">
+                    <h2 class="section-title">Daily Braiding Count Report</h2>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-chart-line me-2"></i> Daily Braiding Count Report
+                                </div>
+                            </div>
+                            <!-- Filter Bar -->
+                            <div class="mt-3">
+                                <div class="row g-2">
+                                    <div class="col-md-5">
+                                        <div class="input-group">
+                                            <span class="input-group-text"
+                                                style="font-size: 12px; font-weight: 400;">Date</span>
+                                            <input type="date" class="form-control" id="reportDate" title="Select date">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <select class="form-select" id="reportLocationFilter">
+                                            <option value="">All Locations</option>
+                                            <option value="AKURE">AKURE</option>
+                                            <option value="IBADAN">IBADAN</option>
+                                            <option value="ADO-EKITI">ADO-EKITI</option>
+                                            <option value="ILORIN">ILORIN</option>
+                                            <option value="OSOGBO">OSOGBO</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-outline-secondary w-100"
+                                            id="clearReportFiltersBtn" title="Clear all filters">
+                                            <i class="fas fa-times"></i> Clear
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="stylistReportTable">
+                                    <thead class="table-info">
+                                        <tr>
+                                            <th class="text-center text-wrap align-content-center fw-900"
+                                                style="min-width:55px;">TOTAL STYLISTS</th>
+                                            <th class="text-end align-content-center fw-900" id="stylistCounts"
+                                                style="min-width:100px;"></th>
+                                            <th class="text-center text-wrap align-content-center fw-900"
+                                                style="min-width:120px;">TOTAL TOKEN COUNTS</th>
+                                            <th class="text-end align-content-center fw-900" id="toknCounts"
+                                                style="min-width:80px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th class="text-center" style="min-width:40px;">Sl</th>
+                                            <th style="min-width:100px;">Stylist Details</th>
+                                            <th style="min-width:120px;">Stylist Bank Details</th>
+                                            <th style="min-width:80px;">Braiding Counts</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="stylistReportTableBody">
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted">Loading all data...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <style>
+                                #stylistReportTable {
+                                    table-layout: auto;
+                                }
+
+                                #stylistReportTable th,
+                                #stylistReportTable td {
+                                    white-space: nowrap;
+                                }
+                            </style>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="payments" class="dashboard-section" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2 class="section-title">Payment Proof CSV Upload</h2>
@@ -2360,7 +2462,8 @@
                                                 aria-expanded="false">
                                                 Select Access Fields
                                             </button>
-                                            <div class="dropdown-menu p-2" style="min-width: 250px;">
+                                            <div class="dropdown-menu p-2"
+                                                style="min-width: 250px; max-height: 250px; overflow-y: auto;">
                                                 <div class="form-check">
                                                     <input class="form-check-input" type="checkbox" value="dashboard"
                                                         id="access_dashboard" name="accessFields">
@@ -2388,10 +2491,17 @@
                                                         for="access_stylists">Stylists</label>
                                                 </div>
                                                 <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox"
+                                                        value="stylist-report" id="access_stylist_report"
+                                                        name="accessFields">
+                                                    <label class="form-check-label" for="access_stylist_report">Stylist
+                                                        Report</label>
+                                                </div>
+                                                <div class="form-check">
                                                     <input class="form-check-input" type="checkbox" value="customers"
                                                         id="access_customers" name="accessFields">
-                                                    <label class="form-check-label"
-                                                        for="access_customers">Customers</label>
+                                                    <label class="form-check-label" for="access_customers">Token
+                                                        Counts</label>
                                                 </div>
                                                 <div class="form-check">
                                                     <input class="form-check-input" type="checkbox"
