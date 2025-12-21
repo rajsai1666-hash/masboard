@@ -143,12 +143,13 @@ document.addEventListener('DOMContentLoaded', function () {
     var clearReportFiltersBtn = document.getElementById('clearReportFiltersBtn');
     if (clearReportFiltersBtn) {
         clearReportFiltersBtn.addEventListener('click', clearReportFilters);
+        clearReportFiltersBtn.addEventListener('click', generateStylistReport);
     }
 
     // Load initial report data after a delay to ensure Firebase is ready
-    // setTimeout(() => {
-    //     generateStylistReport();
-    // }, 3000);
+    setTimeout(() => {
+        generateStylistReport();
+    }, 3000);
 });
 
 // Secure event binding for customer search/filter/clear
@@ -4543,7 +4544,7 @@ function updateCustomerTable(customersList) {
         tbody.innerHTML = '<tr><td colspan=\"8\" class=\"text-center text-muted\">No braiding registered yet</td></tr>';
         return;
     }
-
+    // console.log('👥 Updating customer table with', customersList);
     tbody.innerHTML = customersList.map(([key, data]) => {
         const statusColor = 'success'; // Default status
         const paymentStatus = data.paymentStatus || 'TO BE PAID';
@@ -4971,7 +4972,6 @@ function handleCSVUpload(event) {
         database.ref('customers').once('value').then((snapshot) => {
             const existingCustomers = snapshot.val() || {};
             // console.log('Existing customers:', Object.keys(existingCustomers).length);
-
             // Process each CSV row
             for (let i = 1; i < lines.length; i++) {
                 const data = lines[i].split(',').map(d => d.trim().replace(/^"|"$/g, ''));
@@ -4980,9 +4980,11 @@ function handleCSVUpload(event) {
 
                 const custId = data[headers.indexOf('Narration (Transaction ID)')];
                 const paymentStatus = data[headers.indexOf('Payment Status')];
-                const paymentAmount = data[headers.indexOf('Amount')] || '5000';
-
+                const paymentAmountRaw = data[headers.indexOf('Amount')] || '5000';
+                const paymentAmount = paymentAmountRaw.toString().replace(/,/g, '');
+                console.log('Processing CSV row:', { custId, paymentStatus, paymentAmount });
                 if (custId && paymentStatus) {
+                    console.log('Processing payment update for customer:', existingCustomers[custId], custId, paymentStatus, paymentAmount);
                     // Check if customer exists in Firebase
                     if (existingCustomers[custId]) {
                         updates.push({
@@ -5033,6 +5035,7 @@ function handleCSVUpload(event) {
 
 // Process payment updates in batch
 function processPaymentUpdates(updates) {
+    console.log('Starting batch payment updates for', updates.length, 'records...');
     let successCount = 0;
     let errorCount = 0;
     console.log('Processing', updates.length, 'payment updates...', updates);
@@ -5866,16 +5869,6 @@ function toggleAddUserForm() {
     }
 }
 
-// User Management Functions
-// function toggleAddUserForm() {
-//     const form = document.getElementById('addUserForm');
-//     if (form.style.display === 'none') {
-//         form.style.display = 'block';
-//     } else {
-//         form.style.display = 'none';
-//     }
-// }
-
 function addNewUser() {
     const form = document.getElementById('newUserForm');
     const formData = new FormData(form);
@@ -6381,7 +6374,54 @@ function initializePaymentRequestForm() {
     // Handle upload CSV button
     if (uploadBtn) {
         uploadBtn.addEventListener('click', function () {
-            const modal = new bootstrap.Modal(document.getElementById('csvUploadModal'));
+            const modalElement = document.getElementById('csvUploadModal');
+
+            // Remove any existing event listeners to prevent duplicates
+            modalElement.removeEventListener('shown.bs.modal', handleModalShown);
+            modalElement.removeEventListener('hidden.bs.modal', handleModalHidden);
+            modalElement.removeEventListener('show.bs.modal', handleModalShow);
+
+            // Define event handlers
+            function handleModalShow() {
+                // Immediately remove aria-hidden when modal starts to show
+                modalElement.removeAttribute('aria-hidden');
+                modalElement.setAttribute('aria-live', 'polite');
+            }
+
+            function handleModalShown() {
+                // Ensure accessibility attributes are correct when fully shown
+                modalElement.removeAttribute('aria-hidden');
+                modalElement.setAttribute('aria-live', 'polite');
+                modalElement.setAttribute('role', 'dialog');
+                modalElement.setAttribute('aria-labelledby', modalElement.querySelector('.modal-title')?.id || 'modal-title');
+
+                // Focus on the file input for better accessibility
+                setTimeout(() => {
+                    const fileInput = modalElement.querySelector('#csvFile');
+                    if (fileInput) {
+                        fileInput.focus();
+                    }
+                }, 100);
+            }
+
+            function handleModalHidden() {
+                // Clean up when modal is hidden
+                modalElement.setAttribute('aria-hidden', 'true');
+                modalElement.removeAttribute('aria-live');
+            }
+
+            // Attach event listeners
+            modalElement.addEventListener('show.bs.modal', handleModalShow);
+            modalElement.addEventListener('shown.bs.modal', handleModalShown);
+            modalElement.addEventListener('hidden.bs.modal', handleModalHidden);
+
+            // Create and show modal
+            const modal = new bootstrap.Modal(modalElement, {
+                backdrop: 'static',
+                keyboard: true,
+                focus: true
+            });
+
             modal.show();
         });
     }
@@ -6757,7 +6797,7 @@ function refreshEntireDashboard() {//console.log('🔄 Refreshing entire dashboa
     // Refresh all dashboard sections
     updateDashboardStats();
     loadStylists();
-    generateStylistReport();
+    generateStylistReport('REFRESH');
     loadCustomers();
     loadPaymentsTable();
     loadPaymentRequestsData();
@@ -6835,7 +6875,7 @@ function uploadCSVData() {
         const colMap = {};
         headers.forEach((h, i) => {
             const key = h.toLowerCase().replace(/\s+/g, '');
-            if (key.includes('beneficiary')) colMap.beneficiary = i;
+            if (key.includes('beneficiary')) colMap.beneficiaryName = i;
             if (key.includes('bank')) colMap.bank = i;
             if (key.includes('toaccount')) colMap.toAccount = i;
             if (key.includes('datecreated')) colMap.datecreated = i;
@@ -6845,55 +6885,217 @@ function uploadCSVData() {
             if (key.includes('paymentstatus')) colMap.paymentStatus = i;
         });
 
+        // If 12 columns detected and Payment Status not found, use fixed positions
+        const useFixedPositions = headers.length >= 12 && colMap.paymentStatus === undefined;
+        if (useFixedPositions) {
+            colMap.datecreated = 1;
+            colMap.beneficiary = 2;
+            colMap.bank = 8;
+            colMap.toAccount = 9;
+            colMap.amount = 4;
+            colMap.narration = 7;
+            colMap.approvalStatus = 10;
+            colMap.paymentStatus = 11; // Column 12 (0-indexed)
+        }
+
         for (let i = 1; i < lines.length; i++) {
             if (lines[i].trim()) {
                 const cells = lines[i].split(',').map(c => c.trim().replace(/"/g, ''));
-                csvData.push({
-                    beneficiary: cells[colMap.beneficiary] || '',
-                    bank: cells[colMap.bank] || '',
-                    toAccount: cells[colMap.toAccount] || '',
-                    datecreated: cells[colMap.datecreated] || '',
-                    amount: cells[colMap.amount] || '',
-                    narration: cells[colMap.narration] || '',
-                    approvalStatus: cells[colMap.approvalStatus] || '',
-                    paymentStatus: cells[colMap.paymentStatus] || ''
-                });
+                if (cells.length >= 6 && colMap.narration !== undefined && colMap.paymentStatus !== undefined) {
+                    // console.log("Processing CSV Row:", colMap, cells);
+                    csvData.push({
+                        beneficiaryName: cells[colMap.beneficiary] || '',
+                        dateCreated: cells[colMap.datecreated] || '',
+                        bank: cells[colMap.bank] || '',
+                        accountNumber: cells[colMap.toAccount] || '',
+                        amount: parseFloat(cells[colMap.amount]) || 0,
+                        narration: cells[colMap.narration],
+                        approvalstatus: cells[colMap.approvalStatus] || '',
+                        paymentStatus: (cells[colMap.paymentStatus] || '').toUpperCase()
+                    });
+                }
             }
         }
 
-        // Process the data
-        let updated = 0;
-        let failed = 0;
-        const promises = csvData.map(row => {
-            return new Promise((resolve) => {
-                if (row.narration) {
-                    database.ref(`transactions/${row.narration}`).update({
-                        paymentStatus: row.paymentStatus || 'pending',
-                        approvalStatus: row.approvalStatus || 'pending'
-                    }).then(() => {
-                        updated++;
-                        resolve();
-                    }).catch(() => {
-                        failed++;
-                        resolve();
-                    });
-                } else {
-                    failed++;
-                    resolve();
-                }
-            });
-        });
-
-        Promise.all(promises).then(() => {
+        if (csvData.length === 0) {
+            showAlert('No valid data found in CSV file', 'warning');
             uploadBtn.innerHTML = originalBtnText;
             uploadBtn.disabled = false;
-            showAlert(`Updated ${updated} transactions. Failed: ${failed}`, updated > 0 ? 'success' : 'warning');
-            document.getElementById('csvPreview').style.display = 'none';
-            fileInput.value = '';
+            return;
+        }
+
+        // Update customer payment statuses in Firebase
+        let updatePromises = [];
+        let updatedCount = 0;
+        let notFoundCount = 0;
+        // console.log("CSV Data to Process:", csvData);
+        csvData.forEach(row => {
+            console.log("row Data:", row);
+            const customerId = row.narration || 'N/A'; // CUST_ID from narration column
+            const stlAccount = row.accountNumber || 'N/A'; // Stylist Bank Account Number
+            const stlBankName = row.bank || 'N/A'; // Stylist Bank Code
+            const stlApprovalStatus = row.approvalstatus || 'N/A'; // approvalStatus
+            const stlDateCreated = row.datecreated || ''//new Date().toISOString(); // Date Created
+            const stlBankStatus = row.paymentStatus || 'N/A';
+            const updatePromise = database.ref('customers').child(customerId).once('value')
+                .then(snapshot => {
+                    if (snapshot.exists()) {
+                        // Update payment status based on Payment Status column
+                        const status = row.paymentStatus;
+                        let newStatus = 'TO BE PAID';
+                        if (status === 'PAID' || status === 'SUCCESSFUL' || status === 'COMPLETED') {
+                            newStatus = 'PAID';
+                        }
+                        return database.ref('customers').child(customerId).update({
+                            paymentStatus: newStatus,
+                            approvalStatus: stlApprovalStatus,
+                            bankName: stlBankName,
+                            bankStatus: stlBankStatus,
+                            accountNumber: stlAccount,
+                            paymentDate: stlDateCreated || '',
+                            lastUpdated: new Date().toISOString(),
+                            updatedViaCSV: true
+                        }).then(() => {
+                            updatedCount++;
+                        });
+                    } else {
+                        notFoundCount++;
+                    }
+                })
+                .catch(error => {
+                    notFoundCount++;
+                });
+            updatePromises.push(updatePromise);
         });
+
+        // Wait for all updates to complete
+        Promise.all(updatePromises)
+            .then(() => {
+                // Close modal
+                bootstrap.Modal.getInstance(document.getElementById('csvUploadModal')).hide();
+                //csv file reset
+                fileInput.value = '';
+                document.getElementById('csvPreview').style.display = 'none';
+                document.getElementById('uploadCSVData').disabled = true;
+                // Show results
+                if (updatedCount > 0) {
+                    console.log("Updated Count:", updatedCount);
+                    showAlert(`Successfully updated ${updatedCount} payment status(es). ${notFoundCount} records not found or had mismatched data.`, 'success');
+
+                    // Refresh entire dashboard
+                    refreshEntireDashboard();
+                } else {
+                    showAlert('No matching records found to update', 'warning');
+                }
+
+                uploadBtn.innerHTML = originalBtnText;
+                uploadBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error updating payment statuses:', error);
+                showAlert('Failed to update payment statuses', 'danger');
+                uploadBtn.innerHTML = originalBtnText;
+                uploadBtn.disabled = false;
+            });
     };
+
     reader.readAsText(fileInput.files[0]);
 }
+// function uploadCSVData() {
+//     const fileInput = document.getElementById('csvFile');
+//     const uploadBtn = document.getElementById('uploadCSVData');
+//     const originalBtnText = uploadBtn.innerHTML;
+
+//     if (!fileInput.files.length) {
+//         showAlert('Please select a CSV file', 'warning');
+//         return;
+//     }
+
+//     if (!firebaseAvailable) {
+//         showAlert('connection failed required to update payment status', 'danger');
+//         return;
+//     }
+
+//     uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Updating...';
+//     uploadBtn.disabled = true;
+
+//     const reader = new FileReader();
+//     reader.onload = function (e) {
+//         const csv = e.target.result;
+//         const lines = csv.split('\n');
+//         const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+
+//         // Flexible CSV format: detect columns by header name
+//         const csvData = [];
+//         const colMap = {};
+//         headers.forEach((h, i) => {
+//             const key = h.toLowerCase().replace(/\s+/g, '');
+//             if (key.includes('beneficiary')) colMap.beneficiary = i;
+//             if (key.includes('bank')) colMap.bank = i;
+//             if (key.includes('toaccount')) colMap.toAccount = i;
+//             if (key.includes('datecreated')) colMap.datecreated = i;
+//             if (key === 'amount') colMap.amount = i;
+//             if (key.includes('narration') || key.includes('transactionid')) colMap.narration = i;
+//             if (key.includes('approvalstatus')) colMap.approvalStatus = i;
+//             if (key.includes('paymentstatus')) colMap.paymentStatus = i;
+//         });
+
+//         for (let i = 1; i < lines.length; i++) {
+//             if (lines[i].trim()) {
+//                 const cells = lines[i].split(',').map(c => c.trim().replace(/"/g, ''));
+//                 csvData.push({
+//                     beneficiary: cells[colMap.beneficiary] || '',
+//                     bank: cells[colMap.bank] || '',
+//                     toAccount: cells[colMap.toAccount] || '',
+//                     datecreated: cells[colMap.datecreated] || '',
+//                     amount: cells[colMap.amount] || '',
+//                     narration: cells[colMap.narration] || '',
+//                     approvalStatus: cells[colMap.approvalStatus] || '',
+//                     paymentStatus: cells[colMap.paymentStatus] || ''
+//                 });
+//             }
+//         }
+
+//         // Process the data
+//         let updated = 0;
+//         let failed = 0;
+//         const promises = csvData.map(row => {
+//             return new Promise((resolve) => {
+//                 if (row.narration) {
+//                     database.ref(`transactions/${row.narration}`).update({
+//                         paymentStatus: row.paymentStatus || 'pending',
+//                         approvalStatus: row.approvalStatus || 'pending'
+//                     }).then(() => {
+//                         updated++;
+//                         resolve();
+//                     }).catch(() => {
+//                         failed++;
+//                         resolve();
+//                     });
+//                 } else {
+//                     failed++;
+//                     resolve();
+//                 }
+//             });
+//         });
+
+//         Promise.all(promises).then(() => {
+//             uploadBtn.innerHTML = originalBtnText;
+//             uploadBtn.disabled = false;
+//             showAlert(`Updated ${updated} transactions. Failed: ${failed}`, updated > 0 ? 'success' : 'warning');
+//             document.getElementById('csvPreview').style.display = 'none';
+//             fileInput.value = '';
+
+//             // Properly close the modal after successful upload
+//             const modalElement = document.getElementById('csvUploadModal');
+//             const modal = bootstrap.Modal.getInstance(modalElement);
+//             if (modal) {
+//                 modal.hide();
+//             }
+//         });
+//     };
+//     reader.readAsText(fileInput.files[0]);
+// }
 
 // Initialize security monitoring
 function initializeSecurity() {
@@ -7500,7 +7702,7 @@ function clearReportFilters() {
             clearBtn.innerHTML = originalHTML;
             clearBtn.classList.remove('btn-success');
             clearBtn.classList.add('btn-outline-secondary');
-            generateStylistReport();
+            // generateStylistReport('CLEARREPORT');
         }, 1500);
     }
 
@@ -7515,14 +7717,16 @@ function loadStylistReport() {
 }
 
 // Generate stylist report based on filters
-function generateStylistReport() {
-    // console.log('generateStylistReport function called');
+function generateStylistReport(action) {
+    console.log('generateStylistReport function called', action ? 'with action: ' + action : '');
 
     const reportDate = document.getElementById('reportDate');
     const reportLocation = document.getElementById('reportLocationFilter');
-    const tableBody = document.getElementById('stylistReportTableBody'); 
+    const tableBody = document.getElementById('stylistReportTableBody');
     const toknCounts = document.getElementById('toknCounts');
+    const toknCountsf = document.getElementById('toknCountsf');
     const stylistCounts = document.getElementById('stylistCounts');
+    const stylistCountsf = document.getElementById('stylistCountsf');
     if (!tableBody) { console.error('Table body not found'); return; }
 
     const reportDateValue = reportDate ? reportDate.value : '';
@@ -7545,24 +7749,24 @@ function generateStylistReport() {
         Object.keys(stylists).forEach((stylistId, index) => {
             const stylist = stylists[stylistId];
             // console.log('Processing stylist:', stylist);
-        const stCode = stylist.stylistCode || stylist.stylishCode || stylist.code;
-        if (stCode) {
-            if (!stylistsData[stCode]) {
-                stylistsData[stCode] = {
-                    stylistCode: stCode,
-                    stylistName: stylist.stylistName || '',
-                    location: stylist.location || '',
-                    phone: stylist.phoneNumber || '',
-                    bankName: stylist.bankName || '',
-                    accountNumber: stylist.bankAccountNumber || '',
-                    beneficiaryName: stylist.beneficiaryName || '',
-                };
-                // console.log('Loaded stylist data:', stylistsData[stCode]);
+            const stCode = stylist.stylistCode || stylist.stylishCode || stylist.code;
+            if (stCode) {
+                if (!stylistsData[stCode]) {
+                    stylistsData[stCode] = {
+                        stylistCode: stCode,
+                        stylistName: stylist.stylistName || '',
+                        location: stylist.location || '',
+                        phone: stylist.phoneNumber || '',
+                        bankName: stylist.bankName || '',
+                        accountNumber: stylist.bankAccountNumber || '',
+                        beneficiaryName: stylist.beneficiaryName || '',
+                    };
+                    // console.log('Loaded stylist data:', stylistsData[stCode]);
+                }
+                // stylistsData[stCode].braidingCount++;
+            } else {
+                console.warn('No stylist code found for customer:', stCode, stylistsData);
             }
-            // stylistsData[stCode].braidingCount++;
-        } else {
-            console.warn('No stylist code found for customer:', stCode,stylistsData);
-        }
         });
     }).catch(error => {
         console.error('Error fetching stylists data:', error);
@@ -7652,6 +7856,8 @@ function generateStylistReport() {
         const reportArray = Object.values(reportData).sort((a, b) => a.stylistCode.localeCompare(b.stylistCode));
         toknCounts.textContent = `${reportArray.reduce((sum, stylist) => sum + stylist.braidingCount, 0)}`;
         stylistCounts.textContent = `${reportArray.length}`;
+        toknCountsf.textContent = `${reportArray.reduce((sum, stylist) => sum + stylist.braidingCount, 0)}`;
+        stylistCountsf.textContent = `${reportArray.length}`;
         console.log('Final report array:', reportArray.length);
 
         // Generate table rows
