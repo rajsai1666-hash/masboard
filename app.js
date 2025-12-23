@@ -2980,7 +2980,7 @@ function getLocationName(code) {
         'B': 'IBADAN',
         'C': 'ADO-EKITI',
         'D': 'ILORIN',
-        'E': 'OSOGBO'
+        'E': 'OSOGBO',
         'F': 'IBADAN-MOKOLA'
     };
     return locations[code] || '';
@@ -8090,4 +8090,5 @@ document.addEventListener('DOMContentLoaded', function () {//stylistResult
     // Background security scanning enabled automatically
     // Security checks run quietly in the background every 5 minutes
 });
+
 
