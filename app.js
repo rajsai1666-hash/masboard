@@ -1487,6 +1487,7 @@ function showEditUserModal(userId, user) {
                                                 <option value="all" ${safeLocation === 'all' ? 'selected' : ''}>All Locations</option>
                                                 <option value="AKURE" ${safeLocation === 'AKURE' ? 'selected' : ''}>AKURE</option>
                                                 <option value="IBADAN" ${safeLocation === 'IBADAN' ? 'selected' : ''}>IBADAN</option>
+                                                <option value="IBADAN-MOKOLA" ${safeLocation === 'IBADAN-MOKOLA' ? 'selected' : ''}>IBADAN-MOKOLA</option>
                                                 <option value="ADO-EKITI" ${safeLocation === 'ADO-EKITI' ? 'selected' : ''}>ADO-EKITI</option>
                                                 <option value="ILORIN" ${safeLocation === 'ILORIN' ? 'selected' : ''}>ILORIN</option>
                                                 <option value="OSOGBO" ${safeLocation === 'OSOGBO' ? 'selected' : ''}>OSOGBO</option>
@@ -2980,6 +2981,7 @@ function getLocationName(code) {
         'C': 'ADO-EKITI',
         'D': 'ILORIN',
         'E': 'OSOGBO'
+        'F': 'IBADAN-MOKOLA'
     };
     return locations[code] || '';
 }
@@ -3187,6 +3189,7 @@ function showEditStylistModal(stylistKey, stylist) {
                                         <option value="">Select Location</option>
                                         <option value="AKURE" ${safeLocation === 'AKURE' ? 'selected' : ''}>AKURE</option>
                                         <option value="IBADAN" ${safeLocation === 'IBADAN' ? 'selected' : ''}>IBADAN</option>
+                                        <option value="IBADAN-MOKOLA" ${safeLocation === 'IBADAN-MOKOLA' ? 'selected' : ''}>IBADAN-MOKOLA</option>
                                         <option value="ADO-EKITI" ${safeLocation === 'ADO-EKITI' ? 'selected' : ''}>ADO-EKITI</option>
                                         <option value="ILORIN" ${safeLocation === 'ILORIN' ? 'selected' : ''}>ILORIN</option>
                                         <option value="OSOGBO" ${safeLocation === 'OSOGBO' ? 'selected' : ''}>OSOGBO</option>
@@ -8087,3 +8090,4 @@ document.addEventListener('DOMContentLoaded', function () {//stylistResult
     // Background security scanning enabled automatically
     // Security checks run quietly in the background every 5 minutes
 });
+
