@@ -1,14 +1,24 @@
 // Firebase Configuration
 // Firebase is loaded via CDN in index.html, available globally as window.firebase
 
+// const firebaseConfig = {
+//     apiKey: "AIzaSyBsqg1lQJGbCTdnaF_LwnqFEj2DnKnx784",
+//     authDomain: "market-activation.firebaseapp.com",
+//     databaseURL: "https://market-activation-default-rtdb.firebaseio.com",
+//     projectId: "market-activation",
+//     storageBucket: "market-activation.firebasestorage.app",
+//     messagingSenderId: "286226385972",
+//     appId: "1:286226385972:web:eafb6b1e5ecff6bfae8e61"
+// };
+
 const firebaseConfig = {
-    apiKey: "AIzaSyBsqg1lQJGbCTdnaF_LwnqFEj2DnKnx784",
-    authDomain: "market-activation.firebaseapp.com",
-    databaseURL: "https://market-activation-default-rtdb.firebaseio.com",
-    projectId: "market-activation",
-    storageBucket: "market-activation.firebasestorage.app",
-    messagingSenderId: "286226385972",
-    appId: "1:286226385972:web:eafb6b1e5ecff6bfae8e61"
+    apiKey: "AIzaSyAgy5YvRKNfqktEaJ2QLLui8odbDio_kJM",
+    authDomain: "darling-braiding-activation.firebaseapp.com",
+    databaseURL: "https://darling-braiding-activation-default-rtdb.firebaseio.com",
+    projectId: "darling-braiding-activation",
+    storageBucket: "darling-braiding-activation.firebasestorage.app",
+    messagingSenderId: "391441447854",
+    appId: "1:391441447854:web:502ecb8832063fe704e63f",
 };
 
 // Initialize Firebase using a single object parameter (recommended)
@@ -8090,3 +8100,4 @@ document.addEventListener('DOMContentLoaded', function () {//stylistResult
     // Background security scanning enabled automatically
     // Security checks run quietly in the background every 5 minutes
 });
+
