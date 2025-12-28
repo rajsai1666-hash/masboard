@@ -156,10 +156,7 @@ document.addEventListener('DOMContentLoaded', function () {
         clearReportFiltersBtn.addEventListener('click', generateStylistReport);
     }
 
-    // Load initial report data after a delay to ensure Firebase is ready
-    setTimeout(() => {
-        generateStylistReport();
-    }, 3000);
+    // NOTE: Do NOT load report data here - it will be loaded after login in initializeDashboard()
 });
 
 // Secure event binding for customer search/filter/clear
@@ -358,7 +355,7 @@ class SecurityProtection {
 
     performQuietScan() {
         // Silent security scan - no alerts unless real threat
-        console.log('🛡️ Security scan completed - System protected');
+        // console.log('🛡️ Security scan completed - System protected');
     }
 
     getSecurityReport() {
@@ -375,25 +372,51 @@ const securityProtection = new SecurityProtection();
 let stylistsData = [];
 let stylistsDataGlobal = [];
 
-// Test Firebase connectivity without authentication
+// Preloaded dashboard data for instant display after login
+let preloadedDashboardData = {
+    stylists: null,
+    customers: null,
+    stats: null
+};
+
+// Preload dashboard data in background before login
+function preloadDashboardData() {
+    // Preload stylists
+    database.ref('stylists').once('value').then(snapshot => {
+        preloadedDashboardData.stylists = snapshot.val() || {};
+    });
+    // Preload customers
+    database.ref('customers').once('value').then(snapshot => {
+        preloadedDashboardData.customers = snapshot.val() || {};
+    });
+    // Preload stats (just call updateDashboardStats, which will use preloaded data if available)
+    // Optionally, you can add more preloads here
+}
+
+// Start preloading as soon as app starts
+if (typeof firebase !== 'undefined' && typeof database !== 'undefined' && database) {
+    preloadDashboardData();
+}
+
+// Test Firebase connectivity without requiring authentication
 function testFirebaseConnectivity() {
-
-    // Test with a simple write operation
-    const testRef = database.ref('test_connection');
-    const testData = {
-        timestamp: new Date().toISOString(),
-        test: 'connectivity_check'
-    };
-
-    return testRef.set(testData)
-        .then(() => {
+    // Simply check if Firebase is initialized properly
+    // No database operations needed - just verify the SDK is loaded
+    try {
+        if (typeof firebase !== 'undefined' && typeof database !== 'undefined' && database) {
             firebaseAvailable = true;
-            return true;
-        })
-        .catch((error) => {
+            // console.log('✅ Firebase SDK initialized successfully');
+            return Promise.resolve(true);
+        } else {
             firebaseAvailable = false;
-            return false;
-        });
+            console.error('❌ Firebase SDK not properly initialized');
+            return Promise.resolve(false);
+        }
+    } catch (error) {
+        firebaseAvailable = false;
+        console.error('❌ Firebase initialization error:', error);
+        return Promise.resolve(false);
+    }
 }
 
 // Initialize Firebase and test connectivity - SINGLE CLEAN VERSION
@@ -404,7 +427,7 @@ function initializeApp() {
     // Initialize login system first
     initializeLoginSystem();
 
-    // Initialize other components (will be called after login)
+    // Initialize other components (set up event listeners only, NO data loading)
     initializePasswordToggle();
     initializeNewUserForm();
     initializePaymentRequestForm();
@@ -570,7 +593,7 @@ const MASTER_LOGIN = {
 
 // Section permissions based on roles
 const SECTION_PERMISSIONS = {
-    [ACCESS_LEVELS.ADMIN]: ['dashboard', 'register-stylist', 'braiding-form', 'stylists', 'stylist-report', 'customers', 'payment-request', 'payments', 'reports', 'user-management', 'settings'],
+    [ACCESS_LEVELS.ADMIN]: ['dashboard', 'register-stylist', 'braiding-form', 'stylists', 'sale-order-form', 'sale-order-report', 'stylist-report', 'customers', 'payment-request', 'payments', 'reports', 'user-management', 'settings'],
     [ACCESS_LEVELS.MANAGER]: ['dashboard', 'stylists', 'customers', 'payments', 'reports'],
     [ACCESS_LEVELS.USER]: ['dashboard', 'stylists', 'customers'],
     [ACCESS_LEVELS.VIEWER]: ['dashboard', 'reports']
@@ -1387,10 +1410,10 @@ function loadUsersTable() {
                                 <td>${user.createdDate ? new Date(user.createdDate).toLocaleDateString() : 'N/A'}</td>
                                 <td>
                                     <div class="btn-group">
-                                        <button class="btn btn-sm btn-outline-warning" onclick="editUser('${key}')">
+                                        <button class="btn btn-sm btn-outline-warning" data-action="edit-user" data-user-key="${key}">
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${key}')">
+                                        <button class="btn btn-sm btn-outline-danger" data-action="delete-user" data-user-key="${key}">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </div>
@@ -1545,6 +1568,14 @@ function showEditUserModal(userId, user) {
                                                         <label class="form-check-label" for="edit_access_stylists">Stylists</label>
                                                     </div>
                                                     <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="sale-order-form" id="edit_access_sale_order_form" name="editAccessFields">
+                                                        <label class="form-check-label" for="edit_access_sale_order_form">Sale Order Form</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="sale-order-report" id="edit_access_sale_order_report" name="editAccessFields">
+                                                        <label class="form-check-label" for="edit_access_sale_order_report">Sale Order Report</label>
+                                                    </div>
+                                                    <div class="form-check">
                                                         <input class="form-check-input" type="checkbox" value="stylist-report" id="edit_access_stylist_report" name="editAccessFields">
                                                         <label class="form-check-label" for="edit_access_stylist_report">Stylist Report</label>
                                                     </div>
@@ -1581,7 +1612,7 @@ function showEditUserModal(userId, user) {
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="button" class="btn btn-primary" onclick="saveUserChanges()">
+                                <button type="button" class="btn btn-primary" data-action="save-user-changes">
                                     <i class="fas fa-save me-2"></i>Save Changes
                                 </button>
                             </div>
@@ -1857,6 +1888,8 @@ function submitStylistForm() {
 
             // Auto-refresh dashboard after stylist registration
             setTimeout(() => {
+                // Refresh data cache
+                forceRefreshDataCache('stylists');
                 if (typeof updateDashboardStats === 'function') {
                     updateDashboardStats();
                 }
@@ -1887,15 +1920,108 @@ function submitStylistForm() {
         });
 }
 
+// --- Distributor Datalist Logic ---
+let distributorNames = [];
+
+function loadDistributorNames() {
+    // Try to load from localStorage first
+    const local = loadFromLocal('distributors');
+    if (Array.isArray(local) && local.length > 0) {
+        distributorNames = local;
+        updateDistributorDatalist();
+        return;
+    }
+    // If not in local, try Firebase (if available)
+    if (firebaseAvailable) {
+        database.ref('distributors').once('value').then(snapshot => {
+            const data = snapshot.val();
+            if (Array.isArray(data)) {
+                distributorNames = data;
+            } else if (data && typeof data === 'object') {
+                distributorNames = Object.values(data).filter(Boolean);
+            } else {
+                distributorNames = [];
+            }
+            updateDistributorDatalist();
+        }).catch(() => {
+            distributorNames = [];
+            updateDistributorDatalist();
+        });
+    } else {
+        distributorNames = [];
+        updateDistributorDatalist();
+    }
+}
+
+function updateDistributorDatalist() {
+    const datalist = document.getElementById('distributorList');
+    if (!datalist) return;
+    datalist.innerHTML = distributorNames.map(name => `<option value="${name}"></option>`).join('');
+}
+
+function saveDistributorNames() {
+    // Save to localStorage
+    localStorage.setItem('firebase_distributors', JSON.stringify(distributorNames));
+    // Save to Firebase if available
+    if (firebaseAvailable) {
+        database.ref('distributors').set(distributorNames);
+    }
+}
+
+function setupDistributorInputListeners() {
+    // For all distributor inputs in the items table
+    const itemsTableBody = document.getElementById('itemsTableBody');
+    if (!itemsTableBody) return;
+    itemsTableBody.addEventListener('blur', function (e) {
+        if (e.target && e.target.classList.contains('item-distributor')) {
+            let val = e.target.value.trim();
+            if (val) {
+                val = val.toUpperCase();
+                e.target.value = val;
+                if (!distributorNames.includes(val)) {
+                    distributorNames.push(val);
+                    updateDistributorDatalist();
+                    saveDistributorNames();
+                }
+            }
+        }
+    }, true);
+}
+
+// Patch: Also auto-uppercase on input
+function setupDistributorUppercase() {
+    const itemsTableBody = document.getElementById('itemsTableBody');
+    if (!itemsTableBody) return;
+    itemsTableBody.addEventListener('input', function (e) {
+        if (e.target && e.target.classList.contains('item-distributor')) {
+            e.target.value = e.target.value.toUpperCase();
+        }
+    });
+}
+
 // Initialize dashboard functionality - SINGLE CLEAN VERSION
 function initializeDashboard() {
     // Initialize forms
     initializeEnhancedStylistForm();
     initializeCustomerForm();
 
-    // Load data
-    loadStylists();
-    updateDashboardStats();
+    // Initialize sale order system (event listeners only, no data loading)
+    initializeSaleOrderSystem();
+
+    // Distributor datalist logic
+    loadDistributorNames();
+    setupDistributorInputListeners();
+    setupDistributorUppercase();
+
+    // Show dashboard immediately with loading placeholders
+    showDashboardPlaceholders();
+
+    // Load dashboard stats in background (non-blocking)
+    setTimeout(() => {
+        updateDashboardStats();
+    }, 100);
+
+    // NOTE: Other data will be loaded lazily when user navigates to those sections
 
     // Load user management if user has access
     if (currentUser) {
@@ -1909,13 +2035,54 @@ function initializeDashboard() {
         }
 
         if (hasUserManagement) {
-            loadUsersTable();
+            setTimeout(() => {
+                loadUsersTable();
+            }, 200);
         }
     }
 
-    // Initialize navigation and charts
+    // Initialize navigation
     setupNavigation();
-    initializeCharts();
+}
+
+// Show dashboard with loading placeholders for instant response
+function showDashboardPlaceholders() {
+    // Set loading text for stats
+    const statsElements = document.querySelectorAll('.dashboard-section .stat-card .value');
+    statsElements.forEach(element => {
+        element.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    });
+
+    // Show loading for charts
+    const locationChart = document.getElementById('locationChart');
+    if (locationChart) {
+        const ctx = locationChart.getContext('2d');
+        ctx.clearRect(0, 0, locationChart.width, locationChart.height);
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#666';
+        ctx.fillText('Loading chart...', locationChart.width / 2, locationChart.height / 2);
+    }
+
+    const salesChart = document.getElementById('salesLocationChart');
+    if (salesChart) {
+        const ctx = salesChart.getContext('2d');
+        ctx.clearRect(0, 0, salesChart.width, salesChart.height);
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#666';
+        ctx.fillText('Loading chart...', salesChart.width / 2, salesChart.height / 2);
+    }
+
+    const dailyChart = document.getElementById('dailyChart');
+    if (dailyChart) {
+        const ctx = dailyChart.getContext('2d');
+        ctx.clearRect(0, 0, dailyChart.width, dailyChart.height);
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#666';
+        ctx.fillText('Loading chart...', dailyChart.width / 2, dailyChart.height / 2);
+    }
 }
 
 // Load and display stylists data - SINGLE CLEAN VERSION - Firebase ONLY
@@ -1923,323 +2090,228 @@ function loadStylists() {
     const tbody = document.getElementById('stylistsTableBody');
 
     if (firebaseAvailable) {
-        // CLEAR existing listener to prevent caching
-        database.ref('stylists').off('value');
-        // Use once() to get fresh data without caching
-        database.ref('stylists').once('value', (snapshot) => {
-            const stylists = snapshot.val() || {};
-            const stylistsList = Object.entries(stylists);
-
-            // Update global arrays for table display and customer form
-            stylistsData = stylistsList.map(([key, data]) => ({
-                id: key,
-                code: data.stylistCode,
-                name: data.stylistName,
-                phone: data.phoneNumber,
-                location: data.location,
-                date: data.registrationDate,
-                status: data.status || 'Active',
-                bankName: data.bankName,
-                bankAccount: data.bankAccountNumber
-            }));
-
-            stylistsDataGlobal = stylistsList.map(([key, data]) => ({
-                id: key,
-                stylistCode: data.stylistCode,
-                stylistName: data.stylistName,
-                location: data.location, // Fixed property name
-                phoneNumber: data.phoneNumber,
-                registrationDate: data.registrationDate,
-                status: data.status || 'Active'
-            }));
-
-            // Update stylist stats with correct calculations
-            const totalStylists = stylistsList.length;
-            const activeStylists = stylistsList.filter(([key, data]) =>
-                (data.status || 'Active').toLowerCase() === 'active'
-            ).length;
-
-            const activeLocations = [...new Set(
-                stylistsList
-                    .filter(([key, data]) => {
-                        const status = (data.status || 'Active').toString();
-                        const isActive = status === 'active' || status === 'Active' || status.toLowerCase() === 'active';
-                        return isActive;
-                    })
-                    .map(([key, data]) => data.location)
-                    .filter(location => location && location !== 'Unknown' && location !== 'undefined') // Remove null/undefined/Unknown locations
-            )].length;
-
-            const currentMonth = new Date().getMonth();
-            const currentYear = new Date().getFullYear();
-
-            const thisMonthStylists = stylistsList.filter(([key, data]) => {
-                const regDate = new Date(data.registrationDate);
-                const regMonth = regDate.getMonth();
-                const regYear = regDate.getFullYear();
-                const isThisMonth = regMonth === currentMonth && regYear === currentYear;
-
-                return isThisMonth;
-            }).length;
-
-            document.getElementById('totalStylists').textContent = totalStylists;
-            document.getElementById('activeStylists').textContent = activeStylists;
-            document.getElementById('totalLocations').textContent = activeLocations;
-            document.getElementById('newStylists').textContent = thisMonthStylists;
-
-            const locationCounts = {};
-            stylistsList.forEach(([key, data], index) => {
-                const location = data.location || 'Unknown';
-                locationCounts[location] = (locationCounts[location] || 0) + 1;
-            });
-
-            // Update location summary table with calculated data
-            updateLocationSummaryTable(locationCounts);
-
-            // Populate stylist codes dropdown for customer form
-            updateStylistCodesDropdown(stylistsList);
-
-            if (stylistsList.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No stylists registered yet</td></tr>';
-                return;
-            }
-
-            // Fetch customer data to calculate token counts
-            database.ref('customers').once('value', (customerSnapshot) => {
-                const customers = customerSnapshot.val() || {};
-                const customersList = Object.entries(customers);
-
-                // Calculate token count for each stylist
-                const stylistTokenCounts = {};
-                customersList.forEach(([key, customer]) => {
-                    const stylistCode = customer.stylistCode;
-                    if (stylistCode) {
-                        stylistTokenCounts[stylistCode] = (stylistTokenCounts[stylistCode] || 0) + 1;
-                    }
-                });
-
-                tbody.innerHTML = stylistsList.map(([key, data], index) => {
-                    const stylistForTable = {
-                        id: key,
-                        code: data.stylistCode,
-                        name: data.stylistName,
-                        phone: data.phoneNumber,
-                        location: data.location,
-                        date: data.registrationDate,
-                        status: data.status || 'Active',
-                        bankName: data.bankName,
-                        bankAccount: data.bankAccountNumber
-                    };
-
-                    const tokenCount = stylistTokenCounts[data.stylistCode] || 0;
-
-                    const rowHtml = `
-                            <tr data-stylist="${JSON.stringify(stylistForTable).replace(/"/g, '&quot;')}">
-                                <td>
-                                    <div class="text-center">
-                                        <span class="badge bg-primary fs-6">${tokenCount}</span>
-                                        <br><small class="text-muted">Tokens</small>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div>
-                                        <strong>${data.stylistName || 'N/A'}</strong>
-                                        <br><small class="text-muted">ID: ${data.stylistCode || 'N/A'}</small>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div>
-                                        ${data.phoneNumber || 'N/A'}
-                                        <br><small class="text-muted">Mobile</small>
-                                    </div>
-                                </td>
-                                <td><span class="location-badge">${data.location || 'N/A'}</span></td>
-                                <td>
-                                    <div>
-                                        ${new Date(data.registrationDate).toLocaleDateString() || 'N/A'}
-                                        <br><small class="text-muted">${getDaysSince(data.registrationDate)} days ago</small>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div>
-                                        <strong>${data.bankAccountNumber || 'N/A'}</strong>
-                                        <br><small class="text-muted">Bank: ${data.bankName || 'N/A'}</small>
-                                    </div>
-                                </td>
-                                <td>
-                                    ₦<span class="balance-amount" data-stylist-code="${data.stylistCode}">...</span>
-                                </td>
-                                <td>
-                                    ₦<span class="total-amount" data-stylist-code="${data.stylistCode}">...</span>
-                                </td>
-                                <td class="admin-only-column action-column" style="display: none;">
-                                    <div class="btn-group">
-                                        <button type="button" class="btn btn-sm btn-outline-warning edit-stylist-btn" data-stylist-key="${key}" title="Edit Stylist">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        
-                                    </div>
-                                </td>
-                            </tr>
-                        `;
-                    return rowHtml;
-                }).join('');
-
-                // <button type="button" class="btn btn-sm btn-outline-danger delete-stylist-btn" data-stylist-key="${key}" title="Delete Stylist">
-                //     <i class="fas fa-trash"></i>
-                // </button>
-
-                // Apply admin visibility immediately after HTML is set
-                applyAdminOnlyVisibility();
-
-                // Attach action listeners after HTML is populated
-                attachStylistActionListeners();
-
-                // Also update the stylistsData array to include token counts for filtering
-                stylistsData = stylistsList.map(([key, data]) => ({
-                    id: key,
-                    code: data.stylistCode,
-                    name: data.stylistName,
-                    phone: data.phoneNumber,
-                    location: data.location,
-                    date: data.registrationDate,
-                    status: data.status || 'Active',
-                    bankName: data.bankName,
-                    bankAccount: data.bankAccountNumber,
-                    tokenCount: stylistTokenCounts[data.stylistCode] || 0
-                }));
-
-                // Now fetch and update earnings for each stylist
-                stylistsList.forEach(([key, data]) => {
-                    getEarningsForStylist(data.stylistCode).then(earnings => {
-                        const balanceSpan = tbody.querySelector(`.balance-amount[data-stylist-code="${data.stylistCode}"]`);
-                        const totalSpan = tbody.querySelector(`.total-amount[data-stylist-code="${data.stylistCode}"]`);
-
-                        if (balanceSpan) balanceSpan.textContent = earnings.toBePaidAmount.toFixed(2);
-                        if (totalSpan) totalSpan.textContent = earnings.totalAmount.toFixed(2);
-                    });
-                });
-
+        // Use preloaded data if available and clear after use
+        let stylists = null;
+        if (preloadedDashboardData.stylists) {
+            stylists = preloadedDashboardData.stylists;
+            preloadedDashboardData.stylists = null;
+        }
+        let stylistsList = [];
+        if (stylists) {
+            stylistsList = Object.entries(stylists);
+            // Process stylistsList and render table
+            processStylistsData(stylistsList, tbody);
+        } else {
+            // Fallback: fetch stylists live as before
+            database.ref('stylists').once('value', (snapshot) => {
+                const liveStylists = snapshot.val() || {};
+                stylistsList = Object.entries(liveStylists);
+                // Process stylistsList and render table
+                processStylistsData(stylistsList, tbody);
             }).catch(error => {
-                console.error('Error fetching customer data for token counts:', error);
-                // Fallback: show stylists without token counts
-                tbody.innerHTML = stylistsList.map(([key, data], index) => {
-                    const stylistForTable = {
-                        id: key,
-                        code: data.stylistCode,
-                        name: data.stylistName,
-                        phone: data.phoneNumber,
-                        location: data.location,
-                        date: data.registrationDate,
-                        status: data.status || 'Active',
-                        bankName: data.bankName,
-                        bankAccount: data.bankAccountNumber
-                    };
-                    return `
-                            <tr data-stylist="${JSON.stringify(stylistForTable).replace(/"/g, '&quot;')}">
-                                <td>
-                                    <div class="text-center">
-                                        <span class="badge bg-secondary fs-6">0</span>
-                                        <br><small class="text-muted">Tokens</small>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div>
-                                        <strong>${data.stylistName || 'N/A'}</strong>
-                                        <br><small class="text-muted">ID: ${data.stylistCode || 'N/A'}</small>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div>
-                                        ${data.phoneNumber || 'N/A'}
-                                        <br><small class="text-muted">Mobile</small>
-                                    </div>
-                                </td>
-                                <td><span class="location-badge">${data.location || 'N/A'}</span></td>
-                                <td>
-                                    <div>
-                                        ${new Date(data.registrationDate).toLocaleDateString() || 'N/A'}
-                                        <br><small class="text-muted">${getDaysSince(data.registrationDate)} days ago</small>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div>
-                                        <strong>${data.bankAccountNumber || 'N/A'}</strong>
-                                        <br><small class="text-muted">Bank: ${data.bankName || 'N/A'}</small>
-                                    </div>
-                                </td>
-                                <td>
-                                    ₦<span class="balance-amount" data-stylist-code="${data.stylistCode}">...</span>
-                                </td>
-                                <td>
-                                    ₦<span class="total-amount" data-stylist-code="${data.stylistCode}">...</span>
-                                </td>
-                                <td class="admin-only-column" style="display: none;">
-                                    <div class="btn-group">
-                                        <button class="btn btn-sm btn-outline-warning edit-stylist-btn" data-stylist-key="${key}" title="Edit Stylist">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        
-                                    </div>
-                                </td>
-                            </tr>
-                        `;
-                }).join('');
-
-                // <button class="btn btn-sm btn-outline-danger delete-stylist-btn" data-stylist-key="${key}" title="Delete Stylist">
-                // <i class="fas fa-trash"></i>
-                //                         </button >
-                // Update earnings for fallback stylists too
-                stylistsList.forEach(([key, data]) => {
-                    getEarningsForStylist(data.stylistCode).then(earnings => {
-                        const balanceSpan = tbody.querySelector(`.balance-amount[data-stylist-code="${data.stylistCode}"]`);
-                        const totalSpan = tbody.querySelector(`.total-amount[data-stylist-code="${data.stylistCode}"]`);
-
-                        if (balanceSpan) balanceSpan.textContent = earnings.toBePaidAmount.toFixed(2);
-                        if (totalSpan) totalSpan.textContent = earnings.totalAmount.toFixed(2);
-                    });
-                });
+                console.error('Error fetching stylists:', error);
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">Error loading stylists data</td></tr>';
             });
-        }); // Close database.ref('stylists').once callback
-
+            return; // Exit early for async processing
+        }
     } else {
         tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">🚫 Firebase connection required. Please check your connection and refresh.</td></tr>';
     }
 }
 
-// Helper function to calculate earnings for a stylist
-function getEarningsForStylist(stylistCode) {
-    return new Promise((resolve, reject) => {
-        database.ref('customers').once('value')
-            .then(snapshot => {
-                const customers = snapshot.val() || {};
-                const customersList = Object.values(customers);
+// Helper function to process stylists data and render table
+function processStylistsData(stylistsList, tbody) {
+    // Render stylists table and update stats
+    if (stylistsList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No stylists registered yet</td></tr>';
+        return;
+    }
 
-                // Filter customers by stylist code
-                const stylistCustomers = customersList.filter(customer =>
-                    customer.stylistCode === stylistCode
-                );
-
-                let totalAmount = 0;
-                let toBePaidAmount = 0;
-
-                stylistCustomers.forEach(customer => {
-                    const paymentAmount = parseFloat(customer.paymentAmount) || 5000;
-                    const paymentStatus = customer.paymentStatus || 'TO BE PAID';
-
-                    totalAmount += paymentAmount;
-
-                    if (paymentStatus !== 'PAID') {
-                        toBePaidAmount += paymentAmount;
-                    }
-                });
-
-                resolve({ totalAmount, toBePaidAmount });
+    // Update stats
+    const totalStylists = stylistsList.length;
+    const activeStylists = stylistsList.filter(([key, data]) => (data.status || 'Active').toLowerCase() === 'active').length;
+    const activeLocations = [...new Set(
+        stylistsList
+            .filter(([key, data]) => {
+                const status = (data.status || 'Active').toString();
+                return status.toLowerCase() === 'active';
             })
-            .catch(error => {
-                resolve({ totalAmount: 0, toBePaidAmount: 0 });
+            .map(([key, data]) => data.location)
+            .filter(location => location && location !== 'Unknown' && location !== 'undefined')
+    )].length;
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const thisMonthStylists = stylistsList.filter(([key, data]) => {
+        const regDate = new Date(data.registrationDate);
+        return regDate.getMonth() === currentMonth && regDate.getFullYear() === currentYear;
+    }).length;
+    const totalStylistsEl = document.getElementById('totalStylists');
+    const activeStylistsEl = document.getElementById('activeStylists');
+    const totalLocationsEl = document.getElementById('totalLocations');
+    const newStylistsEl = document.getElementById('newStylists');
+    if (totalStylistsEl) totalStylistsEl.textContent = totalStylists;
+    if (activeStylistsEl) activeStylistsEl.textContent = activeStylists;
+    if (totalLocationsEl) totalLocationsEl.textContent = activeLocations;
+    if (newStylistsEl) newStylistsEl.textContent = thisMonthStylists;
+
+    // Get customer data for token counts and earnings calculation
+    database.ref('customers').once('value', (customerSnapshot) => {
+        const customers = customerSnapshot.val() || {};
+        const customersList = Object.entries(customers);
+
+        // Calculate token counts for each stylist
+        const stylistTokenCounts = {};
+        customersList.forEach(([key, customer]) => {
+            const stylistCode = customer.stylistCode;
+            if (stylistCode) {
+                stylistTokenCounts[stylistCode] = (stylistTokenCounts[stylistCode] || 0) + 1;
+            }
+        });
+
+        // Render table rows with actual data
+        tbody.innerHTML = stylistsList.map(([key, data], index) => {
+            const tokenCount = stylistTokenCounts[data.stylistCode] || 0;
+            return `<tr data-stylist-key="${key}">
+                <td>
+                    <div class="text-center">
+                        <span class="badge bg-primary fs-6">${tokenCount}</span>
+                        <br><small class="text-muted">Tokens</small>
+                    </div>
+                </td>
+                <td>
+                    <div>
+                        <strong>${data.stylistName || 'N/A'}</strong>
+                        <br><small class="text-muted">ID: ${data.stylistCode || 'N/A'}</small>
+                    </div>
+                </td>
+                <td>
+                    <div>
+                        ${data.phoneNumber || 'N/A'}
+                        <br><small class="text-muted">Mobile</small>
+                    </div>
+                </td>
+                <td><span class="location-badge">${data.location || 'N/A'}</span></td>
+                <td>
+                    <div>
+                        ${data.registrationDate ? new Date(data.registrationDate).toLocaleDateString() : 'N/A'}
+                        <br><small class="text-muted">${data.registrationDate ? getDaysSince(data.registrationDate) + ' days ago' : ''}</small>
+                    </div>
+                </td>
+                <td>
+                    <div>
+                        <strong>${data.bankAccountNumber || 'N/A'}</strong>
+                        <br><small class="text-muted">Bank: ${data.bankName || 'N/A'}</small>
+                    </div>
+                </td>
+                <td>
+                    ₦<span class="balance-amount" data-stylist-code="${data.stylistCode}">...</span>
+                </td>
+                <td>
+                    ₦<span class="total-amount" data-stylist-code="${data.stylistCode}">...</span>
+                </td>
+                <td class="admin-only-column action-column" style="display: none;">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-sm btn-outline-warning edit-stylist-btn" data-stylist-key="${key}" title="Edit Stylist">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+        applyAdminOnlyVisibility();
+        // Calculate and update earnings for each stylist
+        stylistsList.forEach(([key, data]) => {
+            const stylistCustomers = customersList.filter(([custKey, customer]) => customer.stylistCode === data.stylistCode);
+            let totalAmount = 0;
+            let toBePaidAmount = 0;
+
+            stylistCustomers.forEach(([custKey, customer]) => {
+                const paymentAmount = parseFloat(customer.paymentAmount) || 5000;
+                const paymentStatus = customer.paymentStatus || 'TO BE PAID';
+                totalAmount += paymentAmount;
+                if (paymentStatus !== 'PAID') {
+                    toBePaidAmount += paymentAmount;
+                }
             });
+
+            const balanceSpan = tbody.querySelector(`.balance-amount[data-stylist-code="${data.stylistCode}"]`);
+            const totalSpan = tbody.querySelector(`.total-amount[data-stylist-code="${data.stylistCode}"]`);
+            if (balanceSpan) balanceSpan.textContent = toBePaidAmount.toFixed(2);
+            if (totalSpan) totalSpan.textContent = totalAmount.toFixed(2);
+        });
+    }).catch(error => {
+        console.error('Error fetching customer data:', error);
+        // Render table without customer data
+        tbody.innerHTML = stylistsList.map(([key, data], index) => {
+            return `<tr data-stylist-key="${key}">
+                <td>
+                    <div class="text-center">
+                        <span class="badge bg-secondary fs-6">0</span>
+                        <br><small class="text-muted">Tokens</small>
+                    </div>
+                </td>
+                <td>
+                    <div>
+                        <strong>${data.stylistName || 'N/A'}</strong>
+                        <br><small class="text-muted">ID: ${data.stylistCode || 'N/A'}</small>
+                    </div>
+                </td>
+                <td>
+                    <div>
+                        ${data.phoneNumber || 'N/A'}
+                        <br><small class="text-muted">Mobile</small>
+                    </div>
+                </td>
+                <td><span class="location-badge">${data.location || 'N/A'}</span></td>
+                <td>
+                    <div>
+                        ${data.registrationDate ? new Date(data.registrationDate).toLocaleDateString() : 'N/A'}
+                        <br><small class="text-muted">${data.registrationDate ? getDaysSince(data.registrationDate) + ' days ago' : ''}</small>
+                    </div>
+                </td>
+                <td>
+                    <div>
+                        <strong>${data.bankAccountNumber || 'N/A'}</strong>
+                        <br><small class="text-muted">Bank: ${data.bankName || 'N/A'}</small>
+                    </div>
+                </td>
+                <td>₦0.00</td>
+                <td>₦0.00</td>
+                <td class="admin-only-column action-column" style="display: none;">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-sm btn-outline-warning edit-stylist-btn" data-stylist-key="${key}" title="Edit Stylist">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+        applyAdminOnlyVisibility();
     });
+
+    // Update dropdowns and other UI as needed
+    updateStylistCodesDropdown(stylistsList);
+    // Optionally update global arrays
+    stylistsData = stylistsList.map(([key, data]) => ({
+        id: key,
+        code: data.stylistCode,
+        name: data.stylistName,
+        phone: data.phoneNumber,
+        location: data.location,
+        date: data.registrationDate,
+        status: data.status || 'Active',
+        bankName: data.bankName,
+        bankAccount: data.bankAccountNumber
+    }));
+    stylistsDataGlobal = stylistsList.map(([key, data]) => ({
+        id: key,
+        stylistCode: data.stylistCode,
+        stylistName: data.stylistName,
+        location: data.location,
+        phoneNumber: data.phoneNumber,
+        registrationDate: data.registrationDate,
+        status: data.status || 'Active'
+    }));
 }
 
 // Update stylist codes dropdown for customer form
@@ -2841,7 +2913,7 @@ document.querySelectorAll('.sidebar .nav-link').forEach(link => {
                 }
                 //report for stylist
                 if (typeof loadStylistReport === 'function') {
-                    console.log("Loading stylist report...main pull");
+                    // console.log("Loading stylist report...main pull");
                     // loadStylistReport();
                 }
                 if (typeof loadCustomers === 'function') {
@@ -3231,7 +3303,7 @@ function showEditStylistModal(stylistKey, stylist) {
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" onclick="saveStylistChanges()">
+                        <button type="button" class="btn btn-primary" data-action="save-stylist-changes">
                             <i class="fas fa-save me-2"></i>Save Changes
                         </button>
                     </div>
@@ -3539,8 +3611,8 @@ function filterStylists() {
     // const dashboardStylistCard = document.querySelector('.dashboard-section .row .col-md-3:nth-child(1) .value');
     // if (dashboardStylistCard) {
     //     dashboardStylistCard.textContent = visibleCount;
-    // }
 }
+// })
 
 // Clear all filters
 // function clearFilters() {
@@ -3630,7 +3702,7 @@ function viewStylist(index) {
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                                <button type="button" class="btn btn-primary" onclick="editStylist(${index})" data-bs-dismiss="modal">Edit</button>
+                                <button type="button" class="btn btn-primary" data-action="edit-stylist" data-stylist-index="${index}" data-bs-dismiss="modal">Edit</button>
                             </div>
                         </div>
                     </div>
@@ -3754,159 +3826,160 @@ function loadReportsData() {
     });
 }
 
-// Charts initialization - will be replaced with real data
-let locationChart = null;
-let dailyChart = null;
+// Charts initialization removed to fix CSP violations
+// let locationChart = null;
+// let dailyChart = null;
 
-// Initialize charts with dummy data first, then update with real data
-function initializeCharts() {
-    // Location chart will be updated with real data
-    const locationCtx = document.getElementById('locationChart');
-    if (locationCtx) {
-        if (locationChart && typeof locationChart.destroy === 'function') {
-            locationChart.destroy();
-        }
-        locationChart = new Chart(locationCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Loading...'],
-                datasets: [{
-                    data: [1],
-                    backgroundColor: ['#ddd']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'right',
-                    },
-                    title: {
-                        display: true,
-                        text: 'Braiding Distribution'
-                    }
-                }
-            }
-        });
-    }
+// Chart functionality removed to fix CSP violations
+// function initializeCharts() {
+//     // Location chart will be updated with real data
+//     const locationCtx = document.getElementById('locationChart');
+//     if (locationCtx) {
+//         if (locationChart && typeof locationChart.destroy === 'function') {
+//             locationChart.destroy();
+//         }
+//         locationChart = new Chart(locationCtx, {
+//             type: 'doughnut',
+//             data: {
+//                 labels: ['Loading...'],
+//                 datasets: [{
+//                     data: [1],
+//                     backgroundColor: ['#ddd']
+//                 }]
+//             },
+//             options: {
+//                 responsive: true,
+//                 maintainAspectRatio: false,
+//                 plugins: {
+//                     legend: {
+//                         position: 'right',
+//                     },
+//                     title: {
+//                         display: true,
+//                         text: 'Braiding Distribution'
+//                     }
+//                 }
+//             }
+//         });
+//     }
+//
+//     // Daily chart will be updated with real data
+//     const dailyCtx = document.getElementById('dailyChart');
+//     if (dailyCtx) {
+//         if (dailyChart && typeof dailyChart.destroy === 'function') {
+//             dailyChart.destroy();
+//         }
+//         dailyChart = new Chart(dailyCtx, {
+//             type: 'line',
+//             data: {
+//                 labels: ['Loading...'],
+//                 datasets: [{
+//                     label: 'Daily Registrations',
+//                     data: [0],
+//                     borderColor: '#4285F4',
+//                     backgroundColor: 'rgba(66, 133, 244, 0.1)',
+//                     borderWidth: 3,
+//                     fill: true,
+//                     tension: 0.4
+//                 }]
+//             },
+//             options: {
+//                 responsive: true,
+//                 maintainAspectRatio: false,
+//                 plugins: {
+//                     title: {
+//                         display: true,
+//                         text: 'Daily Registration Progress'
+//                     }
+//                 },
+//                 scales: {
+//                     y: {
+//                         beginAtZero: true,
+//                         title: {
+//                             display: true,
+//                             text: 'Number of Registrations'
+//                         }
+//                     }
+//                 }
+//             }
+//         });
+//     }
+// }
 
-    // Daily chart will be updated with real data
-    const dailyCtx = document.getElementById('dailyChart');
-    if (dailyCtx) {
-        if (dailyChart && typeof dailyChart.destroy === 'function') {
-            dailyChart.destroy();
-        }
-        dailyChart = new Chart(dailyCtx, {
-            type: 'line',
-            data: {
-                labels: ['Loading...'],
-                datasets: [{
-                    label: 'Daily Registrations',
-                    data: [0],
-                    borderColor: '#4285F4',
-                    backgroundColor: 'rgba(66, 133, 244, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Daily Registration Progress'
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Number of Registrations'
-                        }
-                    }
-                }
-            }
-        });
-    }
-}
+// Chart functionality removed to fix CSP violations
+// function updateLocationChart(locationCounts) {
+//     if (!locationChart) return;
 
-// Update location chart with real customer data by location
-function updateLocationChart(locationCounts) {
-    if (!locationChart) return;
+//     // Get real customer data for chart
+//     if (firebaseAvailable) {
+//         database.ref('customers').once('value').then(snapshot => {
+//             const customers = snapshot.val() || {};
+//             const customersArray = Object.values(customers);
+//
+//             // Count customers by stylist location (actual braiding data)
+//             const customerLocationCounts = {};
+//             customersArray.forEach(customer => {
+//                 const location = customer.stylistLocation || 'Unknown';
+//                 customerLocationCounts[location] = (customerLocationCounts[location] || 0) + 1;
+//             });
+//
+//             const locations = Object.keys(customerLocationCounts);
+//             const counts = Object.values(customerLocationCounts);
+//
+//             if (locations.length === 0) {
+//                 locationChart.data.labels = ['No data'];
+//                 locationChart.data.datasets[0].data = [1];
+//                 locationChart.data.datasets[0].backgroundColor = ['#ddd'];
+//                 locationChart.options.plugins.title.text = 'No Token Data Available';
+//             } else {
+//                 locationChart.data.labels = locations;
+//                 locationChart.data.datasets[0].data = counts;
+//                 locationChart.data.datasets[0].backgroundColor = [
+//                     '#4285F4', '#34A853', '#FBBC05', '#EA4335', '#8E44AD',
+//                     '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'
+//                 ];
+//             }
+//             locationChart.update();
+//         }).catch(error => {
+//         });
+//     }
+// }
 
-    // Get real customer data for chart
-    if (firebaseAvailable) {
-        database.ref('customers').once('value').then(snapshot => {
-            const customers = snapshot.val() || {};
-            const customersArray = Object.values(customers);
+// Chart functionality removed to fix CSP violations
+// function updateDailyChart(customersArray) {
+//     if (!dailyChart) return;
 
-            // Count customers by stylist location (actual braiding data)
-            const customerLocationCounts = {};
-            customersArray.forEach(customer => {
-                const location = customer.stylistLocation || 'Unknown';
-                customerLocationCounts[location] = (customerLocationCounts[location] || 0) + 1;
-            });
+//     // Get last 7 days
+//     const last7Days = [];
+//     const dailyCounts = [];
+//
+//     for (let i = 6; i >= 0; i--) {
+//         const date = new Date();
+//         date.setDate(date.getDate() - i);
+//         const dateString = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+//         last7Days.push(dateString);
+//
+//         // Count actual customer registrations for this day
+//         const dayCount = customersArray.filter(customer => {
+//             if (!customer.registrationDate && !customer.timestamp) return false;
+//             const regDate = new Date(customer.registrationDate || customer.timestamp);
+//             return regDate.toDateString() === date.toDateString();
+//         }).length;
+//
+//         dailyCounts.push(dayCount);
+//     }
+//
+//     dailyChart.data.labels = last7Days;
+//     dailyChart.data.datasets[0].data = dailyCounts;
+//     dailyChart.data.datasets[0].label = 'Daily Braiding Registrations';
+//     dailyChart.update();
+// }
 
-            const locations = Object.keys(customerLocationCounts);
-            const counts = Object.values(customerLocationCounts);
-
-            if (locations.length === 0) {
-                locationChart.data.labels = ['No data'];
-                locationChart.data.datasets[0].data = [1];
-                locationChart.data.datasets[0].backgroundColor = ['#ddd'];
-                locationChart.options.plugins.title.text = 'No Token Data Available';
-            } else {
-                locationChart.data.labels = locations;
-                locationChart.data.datasets[0].data = counts;
-                locationChart.data.datasets[0].backgroundColor = [
-                    '#4285F4', '#34A853', '#FBBC05', '#EA4335', '#8E44AD',
-                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'
-                ];
-            }
-            locationChart.update();
-        }).catch(error => {
-        });
-    }
-}
-
-// Update daily chart with real customer registration data
-function updateDailyChart(customersArray) {
-    if (!dailyChart) return;
-
-    // Get last 7 days
-    const last7Days = [];
-    const dailyCounts = [];
-
-    for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateString = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-        last7Days.push(dateString);
-
-        // Count actual customer registrations for this day
-        const dayCount = customersArray.filter(customer => {
-            if (!customer.registrationDate && !customer.timestamp) return false;
-            const regDate = new Date(customer.registrationDate || customer.timestamp);
-            return regDate.toDateString() === date.toDateString();
-        }).length;
-
-        dailyCounts.push(dayCount);
-    }
-
-    dailyChart.data.labels = last7Days;
-    dailyChart.data.datasets[0].data = dailyCounts;
-    dailyChart.data.datasets[0].label = 'Daily Braiding Registrations';
-    dailyChart.update();
-}
-
-// Handle window resize
+// Handle window resize - Chart resize handlers removed
 window.addEventListener('resize', function () {
-    if (locationChart) locationChart.resize();
-    if (dailyChart) dailyChart.resize();
+    // Chart resize functionality removed to fix CSP violations
+    // if (locationChart) locationChart.resize();
+    // if (dailyChart) dailyChart.resize();
     if (window.revenueChart && typeof window.revenueChart.resize === 'function') {
         window.revenueChart.resize();
     }
@@ -4690,6 +4763,8 @@ function updateDashboardStats() {
                 const location = stylist.location || 'Unknown';
                 locationCounts[location] = (locationCounts[location] || 0) + 1;
             });
+
+            // Update location chart
             updateLocationChart(locationCounts);
 
             // Update location summary table
@@ -4764,16 +4839,290 @@ function updateDashboardStats() {
                 // console.log('📊 Updated pending payment display:', pendingPaymentElement.textContent);
             }
 
-            // Update daily chart with customer registration data
+            // Update daily chart with customer data
             updateDailyChart(customersArray);
 
-            // Update location chart with real customer data (call it properly)
-            updateLocationChart();
+            // Update sales by location chart (will load from saleOrders)
+            updateSalesLocationChart();
 
             // console.log('🔄 Dashboard statistics update completed!');
         });
     } else {
     }
+}
+
+// Update location pie chart
+let locationChartInstance = null;
+function updateLocationChart(locationCounts) {
+    const ctx = document.getElementById('locationChart');
+    if (!ctx) return;
+
+    // Destroy existing chart
+    if (locationChartInstance) {
+        locationChartInstance.destroy();
+    }
+
+    const locations = Object.keys(locationCounts);
+    const counts = Object.values(locationCounts);
+
+    // Generate colors
+    const colors = [
+        '#4285F4', '#EA4335', '#FBBC04', '#34A853',
+        '#FF6D00', '#46BDC6', '#7B1FA2', '#F4511E'
+    ];
+
+    locationChartInstance = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: locations,
+            datasets: [{
+                data: counts,
+                backgroundColor: colors.slice(0, locations.length),
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        padding: 15,
+                        font: { size: 12 }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        },
+        plugins: [{
+            afterDatasetsDraw: function (chart) {
+                const ctx = chart.ctx;
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    const total = dataset.data.reduce((a, b) => a + b, 0);
+
+                    meta.data.forEach((element, index) => {
+                        const value = dataset.data[index];
+                        const percentage = ((value / total) * 100).toFixed(1);
+
+                        // Get position
+                        const position = element.tooltipPosition();
+
+                        // Set text properties
+                        ctx.fillStyle = '#000';
+                        ctx.font = 'bold 14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+
+                        // Draw percentage
+                        ctx.fillText(percentage + '%', position.x, position.y);
+                    });
+                });
+            }
+        }]
+    });
+}
+
+// Update daily progress chart
+let dailyChartInstance = null;
+function updateDailyChart(customersArray) {
+    const ctx = document.getElementById('dailyChart');
+    if (!ctx) return;
+
+    // Destroy existing chart
+    if (dailyChartInstance) {
+        dailyChartInstance.destroy();
+    }
+
+    // Group customers by registration date (last 7 days)
+    const dailyCounts = {};
+    const today = new Date();
+
+    for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        dailyCounts[dateStr] = 0;
+    }
+
+    // Count customers per day
+    customersArray.forEach(customer => {
+        const regDate = customer.registrationDate || customer.date;
+        if (regDate) {
+            const dateStr = regDate.split('T')[0];
+            if (dailyCounts.hasOwnProperty(dateStr)) {
+                dailyCounts[dateStr]++;
+            }
+        }
+    });
+
+    const labels = Object.keys(dailyCounts).map(date => {
+        const d = new Date(date);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+    const data = Object.values(dailyCounts);
+
+    dailyChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Daily Registrations',
+                data: data,
+                borderColor: '#4285F4',
+                backgroundColor: 'rgba(66, 133, 244, 0.1)',
+                tension: 0.4,
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            }
+        }
+    });
+}
+
+// Update sales by location pie chart (from saleOrders)
+let salesLocationChartInstance = null;
+function updateSalesLocationChart() {
+
+    const canvas = document.getElementById('salesLocationChart');
+    if (!canvas) return;
+
+    // Destroy existing chart and clear canvas
+    if (salesLocationChartInstance) {
+        salesLocationChartInstance.destroy();
+        salesLocationChartInstance = null;
+    }
+    // Clear canvas to avoid Chart.js ID conflicts
+    const ctx = canvas.getContext ? canvas.getContext('2d') : null;
+    if (ctx && ctx.clearRect) ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Load sale orders from Firebase
+    if (!firebaseAvailable) {
+        return;
+    }
+
+    database.ref('saleOrders').once('value', (snapshot) => {
+        const saleOrders = snapshot.val() || {};
+        const ordersArray = Object.values(saleOrders);
+
+        // Group sales by location
+        const locationSales = {};
+        ordersArray.forEach(order => {
+            const location = order.location || 'Unknown';
+            // Sum all item values in the order
+            const items = order.items || [];
+            const orderTotal = items.reduce((sum, item) => {
+                return sum + (parseFloat(item.value) || 0);
+            }, 0);
+            locationSales[location] = (locationSales[location] || 0) + orderTotal;
+        });
+
+        const locations = Object.keys(locationSales);
+        const sales = Object.values(locationSales);
+
+        // Generate colors
+        const colors = [
+            '#EA4335', '#4285F4', '#FBBC04', '#34A853',
+            '#FF6D00', '#46BDC6', '#7B1FA2', '#F4511E'
+        ];
+
+        salesLocationChartInstance = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: locations,
+                datasets: [{
+                    data: sales,
+                    backgroundColor: colors.slice(0, locations.length),
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            padding: 15,
+                            font: { size: 12 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${label}: ₦${value.toLocaleString()} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            },
+            plugins: [{
+                afterDatasetsDraw: function (chart) {
+                    const ctx = chart.ctx;
+                    chart.data.datasets.forEach((dataset, i) => {
+                        const meta = chart.getDatasetMeta(i);
+                        const total = dataset.data.reduce((a, b) => a + b, 0);
+
+                        meta.data.forEach((element, index) => {
+                            const value = dataset.data[index];
+                            const percentage = ((value / total) * 100).toFixed(1);
+
+                            // Get position
+                            const position = element.tooltipPosition();
+
+                            // Set text properties
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 14px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.strokeStyle = '#000';
+                            ctx.lineWidth = 2;
+
+                            // Draw percentage with outline for visibility
+                            ctx.strokeText(percentage + '%', position.x, position.y);
+                            ctx.fillText(percentage + '%', position.x, position.y);
+                        });
+                    });
+                }
+            }]
+        });
+    });
 }
 
 // Update location summary table with real data
@@ -5158,7 +5507,7 @@ function showMismatchPopup(mismatches) {
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            <button type="button" class="btn btn-primary" onclick="exportMismatches()">Export Mismatches</button>
+                            <button type="button" class="btn btn-primary" data-action="export-mismatches">Export Mismatches</button>
                         </div>
                     </div>
                 </div>
@@ -5257,6 +5606,9 @@ function exportCustomers() {
     });
 }
 
+// Navigation debouncing
+let navigationTimeout = null;
+
 // Setup navigation handling
 function setupNavigation() {
     // Handle sidebar navigation
@@ -5264,18 +5616,35 @@ function setupNavigation() {
         link.addEventListener('click', function (e) {
             e.preventDefault();
 
+            // Debounce rapid clicks
+            if (navigationTimeout) {
+                clearTimeout(navigationTimeout);
+            }
+
             const href = this.getAttribute('href');
             if (href && href.startsWith('#')) {
                 const sectionId = href.substring(1);
-                showSection(sectionId);
 
-                // Update active nav link
+                // Update active nav link immediately for instant feedback
                 document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
                 this.classList.add('active');
+
+                // Show section immediately, load data after
+                navigationTimeout = setTimeout(() => {
+                    showSection(sectionId);
+                }, 50);
             }
         });
     });
 }
+
+// Data loading cache and flags
+let dataCache = {
+    stylists: { loaded: false, timestamp: 0 },
+    customers: { loaded: false, timestamp: 0 },
+    saleOrders: { loaded: false, timestamp: 0 },
+    reports: { loaded: false, timestamp: 0 }
+};
 
 // Show specific section
 function showSection(sectionId) {
@@ -5299,38 +5668,78 @@ function showSection(sectionId) {
         return;
     }
 
-    // Hide all sections
+    // Hide all sections instantly
     document.querySelectorAll('.dashboard-section, .form-section').forEach(section => {
         section.style.display = 'none';
     });
 
-    // Show requested section
+    // Show requested section instantly
     const targetSection = document.getElementById(sectionId);
     if (targetSection) {
         targetSection.style.display = 'block';
 
-        // Clear all filters when switching sections
-        switch (sectionId) {
-            case 'stylists':
+        // Load data in background (non-blocking)
+        setTimeout(() => {
+            loadSectionData(sectionId);
+        }, 10);
+    }
+}
+
+// Optimized data loading function
+function loadSectionData(sectionId) {
+    const now = Date.now();
+
+    switch (sectionId) {
+        case 'stylists':
+            if (!dataCache.stylists.loaded || (now - dataCache.stylists.timestamp) > 0) {
                 clearFilters();
                 loadStylists();
-                break;
-            case 'stylist-report':
+                dataCache.stylists = { loaded: true, timestamp: now };
+            }
+            break;
+        case 'stylist-report':
+            if (!dataCache.reports.loaded || (now - dataCache.reports.timestamp) > 0) {
                 clearReportFilters();
-                // console.log('Loading stylist report...Punch');
-                // loadStylistReport();
-                break;
-            case 'customers':
+                generateStylistReport();
+                dataCache.reports = { loaded: true, timestamp: now };
+            }
+            break;
+        case 'customers':
+            if (!dataCache.customers.loaded || (now - dataCache.customers.timestamp) > 0) {
                 clearCustomerFilters();
                 loadCustomers();
-                break;
-            case 'payment-request':
-                loadPaymentRequestsData();
-                break;
-            case 'dashboard':
-                updateDashboardStats();
-                break;
+                dataCache.customers = { loaded: true, timestamp: now };
+            }
+            break;
+        case 'payment-request':
+            loadPaymentRequestsData();
+            break;
+        case 'sale-order-form':
+            // Load instantly for order form
+            if (!dataCache.saleOrders.loaded || (now - dataCache.saleOrders.timestamp) > 0) {
+                loadSaleOrders();
+                dataCache.saleOrders = { loaded: true, timestamp: now };
+            }
+            break;
+        case 'dashboard':
+            updateDashboardStats();
+            break;
+    }
+}
+
+// Force refresh data cache (call this after adding/updating records)
+function forceRefreshDataCache(section = null) {
+    if (section) {
+        if (dataCache[section]) {
+            dataCache[section].loaded = false;
+            dataCache[section].timestamp = 0;
         }
+    } else {
+        // Refresh all cache
+        Object.keys(dataCache).forEach(key => {
+            dataCache[key].loaded = false;
+            dataCache[key].timestamp = 0;
+        });
     }
 }
 
@@ -6172,18 +6581,18 @@ function displayUsers(userEntries) {
                     <td>${user.lastLogin ? formatDate(user.lastLogin) : 'Never'}</td>
                     <td>
                         <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary" onclick="editUser('${escapeHtml(phoneKey)}')">
+                            <button class="btn btn-outline-primary" data-action="edit-user-mgmt" data-user-key="${escapeHtml(phoneKey)}">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button class="btn btn-outline-info" onclick="showChangePasswordModal('${escapeHtml(phoneKey)}')" 
+                            <button class="btn btn-outline-info" data-action="change-password" data-user-key="${escapeHtml(phoneKey)}"
                                 title="Change Password" placeholder="minimum 6 characters">
                                 <i class="fas fa-key"></i>
                             </button>
                             <button class="btn btn-outline-${escapeHtml(user.status === 'active' ? 'warning' : 'success')}" 
-                                onclick="toggleUserStatus('${escapeHtml(phoneKey)}', '${escapeHtml(user.status)}')">
+                                data-action="toggle-user-status" data-user-key="${escapeHtml(phoneKey)}" data-user-status="${escapeHtml(user.status)}">
                                 <i class="fas fa-${escapeHtml(user.status === 'active' ? 'ban' : 'check')}"></i>
                             </button>
-                            <button class="btn btn-outline-danger" onclick="deleteUser('${escapeHtml(phoneKey)}', '${escapeHtml(user.fullName)}')">
+                            <button class="btn btn-outline-danger" data-action="delete-user-mgmt" data-user-key="${escapeHtml(phoneKey)}" data-user-name="${escapeHtml(user.fullName)}">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -6469,8 +6878,7 @@ function initializePaymentRequestForm() {
         statusFilter.addEventListener('change', applyPaymentFilters);
     }
 
-    // Load initial data
-    loadPaymentRequestsData();
+    // NOTE: Do NOT load data here - it will be loaded after login in initializeDashboard()
 }
 
 function loadPaymentRequestsData() {
@@ -6677,13 +7085,13 @@ function updatePaymentPagination() {
 
     // Previous button
     paginationHTML += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">`;
-    paginationHTML += `<a class="page-link" href="#" onclick="changePaymentPage(${currentPage - 1})">Previous</a></li>`;
+    paginationHTML += `<a class="page-link" href="#" data-action="change-page" data-page="${currentPage - 1}">Previous</a></li>`;
 
     // Page numbers
     for (let i = 1; i <= totalPages; i++) {
         if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
             paginationHTML += `<li class="page-item ${i === currentPage ? 'active' : ''}">`;
-            paginationHTML += `<a class="page-link" href="#" onclick="changePaymentPage(${i})">${i}</a></li>`;
+            paginationHTML += `<a class="page-link" href="#" data-action="change-page" data-page="${i}">${i}</a></li>`;
         } else if (i === currentPage - 3 || i === currentPage + 3) {
             paginationHTML += '<li class="page-item disabled"><span class="page-link">...</span></li>';
         }
@@ -6691,7 +7099,7 @@ function updatePaymentPagination() {
 
     // Next button
     paginationHTML += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">`;
-    paginationHTML += `<a class="page-link" href="#" onclick="changePaymentPage(${currentPage + 1})">Next</a></li>`;
+    paginationHTML += `<a class="page-link" href="#" data-action="change-page" data-page="${currentPage + 1}">Next</a></li>`;
     paginationHTML += '</ul></nav>';
 
     paginationDiv.innerHTML = paginationHTML;
@@ -7759,9 +8167,10 @@ function generateStylistReport(action) {
     let stylistsData = {};
     stylistsRef.once('value').then(snapshot => {
         const stylists = snapshot.val();
+        console.log('Fetched stylists data:', stylists);
         Object.keys(stylists).forEach((stylistId, index) => {
+            console.log('Processing stylist:', stylistId, stylists[stylistId]);
             const stylist = stylists[stylistId];
-            // console.log('Processing stylist:', stylist);
             const stCode = stylist.stylistCode || stylist.stylishCode || stylist.code;
             if (stCode) {
                 if (!stylistsData[stCode]) {
@@ -7774,147 +8183,112 @@ function generateStylistReport(action) {
                         accountNumber: stylist.bankAccountNumber || '',
                         beneficiaryName: stylist.beneficiaryName || '',
                     };
-                    // console.log('Loaded stylist data:', stylistsData[stCode]);
                 }
-                // stylistsData[stCode].braidingCount++;
             } else {
                 console.warn('No stylist code found for customer:', stCode, stylistsData);
             }
         });
+
+        // Now fetch customers and generate report only after stylists are loaded
+        const customersRef = database.ref('customers');
+        customersRef.once('value').then(snapshot => {
+            const customers = snapshot.val();
+            const reportData = {};
+            if (customers) {
+                const customerKeys = Object.keys(customers);
+                if (customerKeys.length > 0) {
+                    // ...existing code...
+                }
+
+                Object.keys(customers).forEach((customerId, index) => {
+                    const customer = customers[customerId];
+                    const regDate = customer.registrationDate ? new Date(customer.registrationDate) : null;
+                    let includeRecord = true;
+                    if (reportDateValue && regDate) {
+                        const regDateStr = regDate.toISOString().split('T')[0];
+                        if (regDateStr !== reportDateValue) {
+                            includeRecord = false;
+                        }
+                    }
+                    const customerLocation = customer.stylistLocation || customer.location || '';
+                    if (customerLocation && reportLocationValue) {
+                        if (customerLocation !== reportLocationValue) {
+                            includeRecord = false;
+                        }
+                    }
+                    if (includeRecord) {
+                        const stylistCode = customer.stylishCode || customer.stylistCode || customer.stylist_code || customer.stylist;
+                        const stylistName = customer.stylishName || customer.stylistName || customer.stylist_name;
+                        const customerLocation = customer.customerstylistLocation || customer.stylistLocation || customer.location;
+                        const stylistPhone = customer.customerstylistMobile || customer.stylistMobile || customer.stylistPhone;
+                        const bankName = customer.customerstylistBankName || customer.stylistBankName || customer.bank_name;
+                        const accountNumber = customer.customerstylistAccountNo || customer.stylistAccountNo || customer.account_number;
+                        if (stylistCode) {
+                            if (!reportData[stylistCode]) {
+                                reportData[stylistCode] = {
+                                    stylistCode: stylistCode,
+                                    stylistName: stylistsData[stylistCode]?.stylistName || '',
+                                    location: customerLocation || '',
+                                    phone: stylistsData[stylistCode]?.phone || '',
+                                    bankName: stylistsData[stylistCode]?.bankName || '',
+                                    accountNumber: stylistsData[stylistCode]?.accountNumber || '',
+                                    braidingCount: 0,
+                                    beneficiaryName: stylistsData[stylistCode]?.beneficiaryName || ''
+                                };
+                            }
+                            reportData[stylistCode].braidingCount++;
+                        } else {
+                            console.warn('No stylist code found for customer:', customerId, customer);
+                        }
+                    }
+                });
+            }
+
+            // Convert to array and sort by stylist code
+            const reportArray = Object.values(reportData).sort((a, b) => a.stylistCode.localeCompare(b.stylistCode));
+            toknCounts.textContent = `${reportArray.reduce((sum, stylist) => sum + stylist.braidingCount, 0)}`;
+            stylistCounts.textContent = `${reportArray.length}`;
+            toknCountsf.textContent = `${reportArray.reduce((sum, stylist) => sum + stylist.braidingCount, 0)}`;
+            stylistCountsf.textContent = `${reportArray.length}`;
+            if (reportArray.length === 0) {
+                let message = 'No stylist data available';
+                if (reportDateValue || reportLocationValue) {
+                    message = 'No data found for selected filters';
+                } else if (!customers) {
+                    message = 'No customer data found in database';
+                } else {
+                    message = 'No customers have stylist information';
+                }
+                tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">
+                    <i class="fas fa-info-circle me-2"></i>${message}
+                    <br><small class="text-muted mt-1">Total customers in database: ${customers ? Object.keys(customers).length : 0}</small>
+                </td></tr>`;
+            } else {
+                tableBody.innerHTML = reportArray.map((stylist, index) => `
+                    <tr>
+                        <td class="text-center">${index + 1}</td>
+                        <td>
+                            <div><strong>${stylist.stylistCode}</strong></div>
+                            <div class="text-muted">${stylist.stylistName}</div>
+                            <div class="text-muted">${stylist.phone}</div>
+                        </td>
+                        <td>
+                            <div><strong>${stylist.beneficiaryName}</strong></div>
+                            <div class="text-muted">${stylist.accountNumber}</div>
+                            <div class="text-muted">${stylist.bankName}</div>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-primary fs-6">${stylist.braidingCount}</span>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }).catch(error => {
+            console.error('Error loading report data:', error);
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading report data</td></tr>';
+        });
     }).catch(error => {
         console.error('Error fetching stylists data:', error);
-    });
-    const customersRef = database.ref('customers');
-    customersRef.once('value').then(snapshot => {
-        const customers = snapshot.val();
-        const reportData = {};
-        // console.log('Total customers fetched from database:', customers ? Object.keys(customers).length : 0);
-
-        if (customers) {
-            const customerKeys = Object.keys(customers);
-            if (customerKeys.length > 0) {
-                // console.log('Number of customers:', customerKeys.length);
-            }
-
-            Object.keys(customers).forEach((customerId, index) => {
-                const customer = customers[customerId];
-
-                // Log first customer details for debugging
-                if (index === 0) {
-                    // console.log('Processing first customer:', customer);
-                }
-
-                const regDate = customer.registrationDate ? new Date(customer.registrationDate) : null;
-                // console.log(`Processing customer`,customer);
-                let includeRecord = true;
-
-                // Apply date filter if specified
-                if (reportDateValue && regDate) {
-                    const regDateStr = regDate.toISOString().split('T')[0];
-                    if (regDateStr !== reportDateValue) {
-                        includeRecord = false;
-                    }
-                }
-                // console.log('includeRecord after date filter for customer', customerId, ':', includeRecord);
-                // Apply location filter if specified
-                // Apply location filter if specified
-                const customerLocation = customer.stylistLocation || customer.location || '';
-                // console.log('Customer location for filtering:', 'Report ' + reportLocationValue,'Customer '+ customerLocation);
-                if (customerLocation && reportLocationValue) {
-                    if (customerLocation !== reportLocationValue) {
-                        includeRecord = false;
-                    }
-                }
-                // console.log(`Customer ${customerId} inclusion status:`, includeRecord);
-                if (includeRecord) {
-                    // console.log('Including customer in report:', customer);
-                    // Try multiple possible field name variations
-                    const stylistCode = customer.stylishCode || customer.stylistCode || customer.stylist_code || customer.stylist;
-                    const stylistName = customer.stylishName || customer.stylistName || customer.stylist_name;
-                    const customerLocation = customer.customerstylistLocation || customer.stylistLocation || customer.location;
-                    const stylistPhone = customer.customerstylistMobile || customer.stylistMobile || customer.stylistPhone;
-                    const bankName = customer.customerstylistBankName || customer.stylistBankName || customer.bank_name;
-                    const accountNumber = customer.customerstylistAccountNo || customer.stylistAccountNo || customer.account_number;
-
-                    // console.log('Customer data check:', {
-                    //     customerId,
-                    //     stylistCode,
-                    //     stylistName,
-                    //     customerLocation,
-                    //     availableFields: Object.keys(customer)
-                    // });
-                    // console.log("stylistCode:", stylistsData[stylistCode],stylistCode);
-                    if (stylistCode) {
-                        if (!reportData[stylistCode]) {
-                            reportData[stylistCode] = {
-                                stylistCode: stylistCode,
-                                stylistName: stylistsData[stylistCode]?.stylistName || '',
-                                location: customerLocation || '',
-                                phone: stylistsData[stylistCode]?.phone || '',
-                                bankName: stylistsData[stylistCode]?.bankName || '',
-                                accountNumber: stylistsData[stylistCode]?.accountNumber || '',
-                                braidingCount: 0,
-                                beneficiaryName: stylistsData[stylistCode]?.beneficiaryName || ''
-                            };
-                        }
-                        reportData[stylistCode].braidingCount++;
-                    } else {
-                        console.warn('No stylist code found for customer:', customerId, customer);
-                    }
-                }
-            });
-        }
-
-        // Convert to array and sort by stylist code
-        const reportArray = Object.values(reportData).sort((a, b) => a.stylistCode.localeCompare(b.stylistCode));
-        toknCounts.textContent = `${reportArray.reduce((sum, stylist) => sum + stylist.braidingCount, 0)}`;
-        stylistCounts.textContent = `${reportArray.length}`;
-        toknCountsf.textContent = `${reportArray.reduce((sum, stylist) => sum + stylist.braidingCount, 0)}`;
-        stylistCountsf.textContent = `${reportArray.length}`;
-        console.log('Final report array:', reportArray.length);
-
-        // Generate table rows
-        if (reportArray.length === 0) {
-            let message = 'No stylist data available';
-            if (reportDateValue || reportLocationValue) {
-                message = 'No data found for selected filters';
-            } else if (!customers) {
-                message = 'No customer data found in database';
-            } else {
-                message = 'No customers have stylist information';
-            }
-
-            tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">
-                <i class="fas fa-info-circle me-2"></i>${message}
-                <br><small class="text-muted mt-1">Total customers in database: ${customers ? Object.keys(customers).length : 0}</small>
-            </td></tr>`;
-            // console.log('No report data to display:', message);
-        } else {
-            // console.log('Displaying report data with', reportArray, 'stylists');
-            tableBody.innerHTML = reportArray.map((stylist, index) => `
-                <tr>
-                    <td class="text-center">${index + 1}</td>
-                    <td>
-                        <div><strong>${stylist.stylistCode}</strong></div>
-                        <div class="text-muted">${stylist.stylistName}</div>
-                        <div class="text-muted">${stylist.phone}</div>
-                    </td>
-                    <td>
-                        <div><strong>${stylist.beneficiaryName}</strong></div>
-                        <div class="text-muted">${stylist.accountNumber}</div>
-                        <div class="text-muted">${stylist.bankName}</div>
-                    </td>
-                    <td class="text-center">
-                        <span class="badge bg-primary fs-6">${stylist.braidingCount}</span>
-                    </td>
-                </tr>
-            `).join('');
-        }
-        // console.log('Report generation completed');
-    }).catch(error => {
-        // console.log('Error fetching report data from database:', error);
-        console.error('Error loading report data:', error);
-        tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading report data</td></tr>';
     });
 }
 
@@ -8045,7 +8419,7 @@ document.addEventListener('DOMContentLoaded', function () {//stylistResult
             popup.innerHTML = `
                     <h4><i class="fas fa-exclamation-triangle text-danger"></i> Security Alert</h4>
                     <p>Multiple failed login attempts detected. Account temporarily locked for security.</p>
-                    <button class="btn btn-primary" onclick="this.parentElement.parentElement.remove(); this.parentElement.remove();">
+                    <button class="btn btn-primary" data-action="close-security-popup">
                         I Understand
                     </button>
                 `;
@@ -8099,5 +8473,1652 @@ document.addEventListener('DOMContentLoaded', function () {//stylistResult
 
     // Background security scanning enabled automatically
     // Security checks run quietly in the background every 5 minutes
+});
+
+// =====================================================
+// SALE ORDER MANAGEMENT FUNCTIONALITY
+// =====================================================
+
+// Global variables for Sale Orders
+let saleOrders = [];
+let orderItems = [];
+let orderCounter = 1;
+let saleOrderSystemInitialized = false; // Track if sale order system is already initialized
+
+// Initialize the sale order system
+function initializeSaleOrderSystem() {
+    // Prevent multiple initializations
+    if (saleOrderSystemInitialized) {
+        console.log('Sale Order System already initialized, skipping...');
+        return;
+    }
+    saleOrderSystemInitialized = true;
+    // console.log('Initializing Sale Order System...');
+
+    // Load data from Firebase/localStorage
+    loadStylistCodes();
+    loadTokenNumbers();
+    loadOrderItems();
+    loadSaleOrders();
+
+    // Setup event listeners
+    setupSaleOrderEventListeners();
+
+    // Set default date
+    setDefaultOrderDate();
+
+    // Update statistics
+    updateOrderStatistics();
+
+    // Update settings items table
+    // updateSettingsItemsTable();
+
+    // Setup initial item row listeners and button states
+    setupItemRowListeners();
+    updateRemoveButtonsState();
+
+    // console.log('Sale Order System initialized successfully');
+}
+
+// Setup all event listeners for sale orders
+function setupSaleOrderEventListeners() {
+    // Form submission
+    const saleOrderForm = document.getElementById('saleOrderForm');
+    if (saleOrderForm) {
+        saleOrderForm.addEventListener('submit', handleSaleOrderSubmission);
+    }
+
+    // Auto-fill functionality is no longer needed for simplified form
+
+    // Add new item row button
+    const addNewItemRowBtn = document.getElementById('addNewItemRowBtn');
+    if (addNewItemRowBtn) {
+        addNewItemRowBtn.addEventListener('click', addNewItemRow);
+    }
+
+    // Setup initial item row event listeners
+    setupItemRowListeners();
+
+    // Form buttons
+    const clearOrderBtn = document.getElementById('clearOrderBtn');
+    if (clearOrderBtn) {
+        clearOrderBtn.addEventListener('click', clearOrderForm);
+    }
+
+    const calculateBtn = document.getElementById('calculateBtn');
+    if (calculateBtn) {
+        // calculateBtn.addEventListener('click', calculateAllItemValues);
+    }
+
+    // Report filters and search
+    const orderSearch = document.getElementById('orderSearch');
+    if (orderSearch) {
+        orderSearch.addEventListener('input', filterSaleOrders);
+    }
+
+    const paymentMethodFilter = document.getElementById('paymentMethodFilter');
+    if (paymentMethodFilter) {
+        paymentMethodFilter.addEventListener('change', filterSaleOrders);
+    }
+
+    const orderFromDate = document.getElementById('orderFromDate');
+    if (orderFromDate) {
+        orderFromDate.addEventListener('change', filterSaleOrders);
+    }
+
+    const orderToDate = document.getElementById('orderToDate');
+    if (orderToDate) {
+        orderToDate.addEventListener('change', filterSaleOrders);
+    }
+
+    const clearOrderFiltersBtn = document.getElementById('clearOrderFiltersBtn');
+    if (clearOrderFiltersBtn) {
+        clearOrderFiltersBtn.addEventListener('click', clearOrderFilters);
+    }
+
+    const refreshOrdersBtn = document.getElementById('refreshOrdersBtn');
+    if (refreshOrdersBtn) {
+        refreshOrdersBtn.addEventListener('click', loadSaleOrders);
+    }
+
+    const exportOrdersBtn = document.getElementById('exportOrdersBtn');
+    if (exportOrdersBtn) {
+        exportOrdersBtn.addEventListener('click', exportSaleOrders);
+    }
+
+    // Settings - Add New Item functionality
+    const addNewItemBtn = document.getElementById('addNewItemBtn');
+    if (addNewItemBtn) {
+        addNewItemBtn.addEventListener('click', showAddItemForm);
+    }
+
+    const saveNewItemBtn = document.getElementById('saveNewItemBtn');
+    if (saveNewItemBtn) {
+        saveNewItemBtn.addEventListener('click', saveNewItem);
+    }
+
+    const cancelAddItemBtn = document.getElementById('cancelAddItemBtn');
+    if (cancelAddItemBtn) {
+        cancelAddItemBtn.addEventListener('click', cancelAddItem);
+    }
+
+    // Settings delete item button
+    const deleteItemBtn = document.getElementById('deleteItemBtn');
+    if (deleteItemBtn) {
+        deleteItemBtn.addEventListener('click', deleteCurrentItem);
+    }
+
+    // Sale Order - Stylist code change handler
+    const stylistCodeSelect = document.getElementById('saleOrderStylistCode');
+    if (stylistCodeSelect) {
+        stylistCodeSelect.addEventListener('change', handleStylistCodeChange);
+        stylistCodeSelect.addEventListener('input', handleStylistCodeChange);
+    }
+
+    // Sale Order - Token number change handler
+    const tokenNoSelect = document.getElementById('tokenNo');
+    if (tokenNoSelect) {
+        tokenNoSelect.addEventListener('change', handleTokenNoChange);
+        tokenNoSelect.addEventListener('input', handleTokenNoChange);
+    }
+
+    // Settings item name auto-fill
+    const settingsItemNameInput = document.getElementById('settingsItemName');
+    if (settingsItemNameInput) {
+        settingsItemNameInput.addEventListener('change', handleSettingsItemNameChange);
+        settingsItemNameInput.addEventListener('input', handleSettingsItemNameChange);
+    }
+}
+
+// Load stylist codes from Firebase database
+function loadStylistCodes() {
+    if (typeof database !== 'undefined' && database) {
+        database.ref('stylists').once('value', (snapshot) => {
+            const stylistCodeList = document.getElementById('stylistCodeList');
+            if (stylistCodeList) {
+                stylistCodeList.innerHTML = '';
+
+                if (snapshot.exists()) {
+                    snapshot.forEach((childSnapshot) => {
+                        const stylist = childSnapshot.val();
+                        if (stylist.stylistCode) {
+                            const option = document.createElement('option');
+                            option.value = stylist.stylistCode;
+                            option.textContent = `${stylist.stylistCode} - ${stylist.name || ''}`;
+                            stylistCodeList.appendChild(option);
+                        }
+                    });
+                    // console.log('Stylist codes loaded from Firebase');
+
+                    // Also populate location dropdowns
+                    populateLocationDropdowns();
+                }
+            }
+        }).catch((error) => {
+            console.error('Error loading stylist codes:', error);
+        });
+    }
+}
+
+// Load token numbers from Firebase database
+function loadTokenNumbers() {
+    if (typeof database !== 'undefined' && database) {
+        database.ref('customers').once('value', (snapshot) => {
+            const tokenNoList = document.getElementById('tokenNoList');
+            if (tokenNoList) {
+                tokenNoList.innerHTML = '';
+
+                if (snapshot.exists()) {
+                    snapshot.forEach((childSnapshot) => {
+                        const customer = childSnapshot.val();
+                        if (customer.tokenNo) {
+                            const option = document.createElement('option');
+                            option.value = customer.tokenNo;
+                            option.textContent = `${customer.tokenNo} - ${customer.customerName || ''}`;
+                            tokenNoList.appendChild(option);
+                        }
+                    });
+                    // console.log('Token numbers loaded from Firebase');
+                }
+            }
+        }).catch((error) => {
+            console.error('Error loading token numbers:', error);
+        });
+    }
+}
+
+// Load order items from Firebase database
+function loadOrderItems() {
+    if (typeof database !== 'undefined' && database) {
+        database.ref('orderItems').once('value', (snapshot) => {
+            const itemNameList = document.getElementById('itemNameList');
+            if (itemNameList) {
+                itemNameList.innerHTML = '';
+                orderItems = [];
+
+                if (snapshot.exists()) {
+                    snapshot.forEach((childSnapshot) => {
+                        const item = childSnapshot.val();
+                        item.firebaseKey = childSnapshot.key; // Store Firebase key for deletion
+                        orderItems.push(item);
+
+                        const option = document.createElement('option');
+                        option.value = item.itemName;
+                        option.textContent = `${item.itemName} - ₦${item.rate || 0}`;
+                        itemNameList.appendChild(option);
+                    });
+                    // console.log('Order items loaded from Firebase');
+                    updateSettingsDataLists(); // Update settings datalists
+                }
+            }
+        }).catch((error) => {
+            console.error('Error loading order items:', error);
+            // Fallback to localStorage
+            loadOrderItemsFromLocalStorage();
+        });
+    } else {
+        // Fallback to localStorage
+        loadOrderItemsFromLocalStorage();
+    }
+}
+
+// Fallback function to load items from localStorage
+function loadOrderItemsFromLocalStorage() {
+    const storedItems = localStorage.getItem('orderItems');
+    if (storedItems) {
+        orderItems = JSON.parse(storedItems);
+        updateItemNameDatalist();
+        updateSettingsDataLists(); // Update settings datalists
+    } else {
+        // Create some default items if none exist
+        orderItems = [
+            {
+                id: 1,
+                itemName: 'Hair Product A',
+                itemCategory: 'Hair Care',
+                distributor: 'Distributor ABC',
+                rate: 1500
+            },
+            {
+                id: 2,
+                itemName: 'Hair Product B',
+                itemCategory: 'Hair Treatment',
+                distributor: 'Distributor XYZ',
+                rate: 2000
+            }
+        ];
+        localStorage.setItem('orderItems', JSON.stringify(orderItems));
+        updateItemNameDatalist();
+        updateSettingsDataLists();
+    }
+}
+
+// Populate all location dropdowns with unique locations from Firebase
+function populateLocationDropdowns() {
+    if (typeof database !== 'undefined' && database) {
+        database.ref('stylists').once('value', (snapshot) => {
+            const locations = new Set();
+
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    const stylist = childSnapshot.val();
+                    if (stylist.location) {
+                        locations.add(stylist.location);
+                    }
+                });
+            }
+
+            // Update the common location dropdown
+            const locationSelect = document.getElementById('saleOrderLocation');
+            if (locationSelect) {
+                const currentValue = locationSelect.value;
+                locationSelect.innerHTML = '<option value="">Select Location</option>';
+
+                // Sort locations alphabetically
+                const sortedLocations = Array.from(locations).sort();
+                sortedLocations.forEach(location => {
+                    const option = document.createElement('option');
+                    option.value = location;
+                    option.textContent = location;
+                    locationSelect.appendChild(option);
+                });
+
+                // Restore previously selected value if it still exists
+                if (currentValue && sortedLocations.includes(currentValue)) {
+                    locationSelect.value = currentValue;
+                }
+            }
+        }).catch((error) => {
+            console.error('Error loading locations:', error);
+        });
+    }
+}                // Restore previous value if it exists
+//                 if (currentValue && locations.has(currentValue)) {
+//                     select.value = currentValue;
+//                 }
+//             });
+
+//             console.log('Location dropdowns populated with', locations.size, 'unique locations');
+//         }).catch((error) => {
+//             console.error('Error loading locations:', error);
+//         });
+//     }
+// }
+
+// Update item name datalist
+function updateItemNameDatalist() {
+    const itemNameList = document.getElementById('itemNameList');
+    if (itemNameList) {
+        itemNameList.innerHTML = '';
+        orderItems.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.itemName;
+            option.textContent = `${item.itemName} - ₦${item.rate || 0}`;
+            itemNameList.appendChild(option);
+        });
+    }
+}
+
+// Handle stylist code change - auto-fill location for all rows
+function handleStylistCodeChange() {
+    // document.getElementById('tokenNo').value = '';
+    const stylistCode = document.getElementById('saleOrderStylistCode').value;
+    const tokenNoSelect = document.getElementById('tokenNoList');
+    const locationSelect = document.getElementById('saleOrderLocation');
+    console.log('Stylist code changed to:', stylistCode);
+    if (stylistCode) {
+        // Update token numbers for selected stylist from customers database
+        if (tokenNoSelect) {
+            tokenNoSelect.innerHTML = '<option value="">Select Token No</option>';
+
+            // Find matching customers with the selected stylist code
+            if (typeof database !== 'undefined' && database) {
+                database.ref('customers').once('value', (snapshot) => {
+                    if (snapshot.exists()) {
+                        let foundTokens = false;
+                        const tokens = [];
+
+                        snapshot.forEach((childSnapshot) => {
+                            const customer = childSnapshot.val();
+                            console.log('Checking customer for stylist code:', customer);
+                            // console.log('Checking customer M1:', customer['stylistCode'] === stylistCode, 'against', stylistCode);
+                            // console.log('Checking customer M2:', customer.stylishCode === stylistCode, 'against', stylistCode);
+                            if ((customer.stylistCode === stylistCode || customer['stylistCode'] === stylistCode)) {
+                                console.log('value is true for customer:', customer.tokenNo);
+                                tokens.push({
+                                    tokenNo: customer.tokenNo,
+                                    customerName: customer.customerName || ''
+                                });
+                                foundTokens = true;
+                            }
+                            // console.log('Customer checked for tokens:', tokens);
+                        });
+
+                        // Sort tokens and add to dropdown
+                        tokens.sort((a, b) => a.tokenNo.localeCompare(b.tokenNo));
+                        tokens.forEach(token => {
+                            const option = document.createElement('option');
+                            option.value = token.tokenNo;
+                            option.textContent = `${token.tokenNo}${token.customerName ? ' - ' + token.customerName : ''}`;
+                            tokenNoSelect.appendChild(option);
+                        });
+
+                        // // Auto-select if only one token found
+                        // if (foundTokens && tokens.length > 0 && tokens.length < 2) {
+                        //     tokenNoSelect.selectedIndex = 1;
+                        // }
+                    }
+                });
+            }
+        }
+
+        // Fill location based on stylist code
+        if (locationSelect && typeof database !== 'undefined' && database) {
+            database.ref('stylists').once('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    snapshot.forEach((childSnapshot) => {
+                        const stylist = childSnapshot.val();
+                        if (stylist.stylistCode === stylistCode && stylist.location) {
+                            locationSelect.value = stylist.location;
+                        }
+                    });
+                }
+            });
+        }
+    }
+}
+
+// Setup event listeners for item rows
+function setupItemRowListeners() {
+    document.querySelectorAll('.item-row').forEach(row => {
+        const itemNameInput = row.querySelector('.item-name');
+        const quantityInput = row.querySelector('.item-quantity');
+        const ValueInput = row.querySelector('.item-rate');
+        const distributorInput = row.querySelector('.item-distributor');
+        const removeBtn = row.querySelector('.remove-item-btn');
+
+        if (itemNameInput) {
+            itemNameInput.addEventListener('change', function () {
+                handleItemNameChange(this);
+                // calculateTotalOrderValue();
+            });
+        }
+
+        if (quantityInput) {
+            quantityInput.addEventListener('input', function () {
+                calculateItemValue(this);
+                // calculateTotalOrderValue();
+            });
+        }
+
+        if (ValueInput) {
+            ValueInput.addEventListener('input', function () {
+                calculateItemValue(this);
+                // calculateTotalOrderValue();
+            });
+        }
+
+        if (distributorInput) {
+            distributorInput.addEventListener('input', function () {
+                this.value = this.value.toUpperCase();
+            });
+        }
+
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function () {
+                removeItemRow(this);
+                // calculateTotalOrderValue();
+            });
+        }
+    });
+}
+
+// Add new item row
+function addNewItemRow() {
+    const tbody = document.getElementById('itemsTableBody');
+    const rowCount = tbody.querySelectorAll('.item-row').length + 1;
+
+    const newRow = document.createElement('tr');
+    newRow.className = 'item-row';
+    newRow.setAttribute('data-row', rowCount);
+
+    newRow.innerHTML = `
+        <td>
+            <input type="text" class="form-control item-name" name="itemName[]" required 
+                   list="itemNameList" placeholder="Select or enter item name">
+        </td>
+        <td>
+            <input type="text" class="form-control item-category" name="itemCategory[]" readonly
+                   placeholder="Auto-filled" style="background-color: #f8f9fa;">
+        </td>
+        <td>
+            <input type="number" class="form-control item-quantity" name="quantity[]" required
+                   min="1" step="1" value="1" placeholder="1">
+        </td>
+        <td>
+            <input type="text" class="form-control item-distributor" name="distributor[]"
+                   placeholder="Enter distributor">
+        </td>
+        <td>
+            <input type="number" class="form-control item-rate" name="rate[]"
+                   step="1" placeholder="Auto-filled" style="background-color: #f8f9fa;">
+        </td>
+        <td>
+            <input type="number" class="form-control item-value" name="value[]" readonly step="1" placeholder="Enter value">
+        </td>
+        <td>
+            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn">
+                <i class="fas fa-trash"></i>
+            </button>
+        </td>
+    `;
+
+    tbody.appendChild(newRow);
+    setupItemRowListeners();
+    updateRemoveButtonsState();
+}
+
+// Remove item row
+function removeItemRow(button) {
+    const row = button.closest('.item-row');
+    if (row) {
+        row.remove();
+        updateRemoveButtonsState();
+    }
+}
+
+// Update remove buttons state (disable if only one row)
+function updateRemoveButtonsState() {
+    const rows = document.querySelectorAll('.item-row');
+    const removeButtons = document.querySelectorAll('.remove-item-btn');
+
+    removeButtons.forEach(btn => {
+        btn.disabled = rows.length <= 1;
+    });
+}
+
+// Handle item name change for table rows
+function handleItemNameChange(input) {
+    const row = input.closest('.item-row');
+    const itemName = input.value;
+
+    if (itemName && row) {
+        const selectedItem = orderItems.find(item => item.itemName === itemName);
+
+        if (selectedItem) {
+            const categoryInput = row.querySelector('.item-category');
+            const distributorInput = row.querySelector('.item-distributor');
+            const rateInput = row.querySelector('.item-rate');
+
+            if (categoryInput) categoryInput.value = selectedItem.itemCategory || '';
+            if (distributorInput) distributorInput.value = selectedItem.distributor || '';
+            if (rateInput) rateInput.value = selectedItem.rate || 0;
+
+            // Auto-fill location from stylist code
+            // Calculate value for this row
+            // calculateItemValue(input);
+        }
+    } else if (row) {
+        // Clear auto-filled fields if item name is cleared
+        const categoryInput = row.querySelector('.item-category');
+        const distributorInput = row.querySelector('.item-distributor');
+        const rateInput = row.querySelector('.item-rate');
+        const valueInput = row.querySelector('.item-value');
+
+        if (categoryInput) categoryInput.value = '';
+        if (distributorInput) distributorInput.value = '';
+        if (rateInput) rateInput.value = '';
+        if (valueInput) valueInput.value = '';
+    }
+}
+
+// Calculate value for a specific item row
+function calculateItemValue(input) {
+    const row = input.closest('.item-row');
+    if (row) {
+        const quantity = parseFloat(row.querySelector('.item-quantity').value) || 0;
+        const rate = parseFloat(row.querySelector('.item-rate').value) || 0;
+        const valueInput = row.querySelector('.item-value');
+        // console.log('Calculating item value for quantity:', quantity, 'rate:', rate);
+        // console.log('Rate:', rate, 'Value:', valueInput);
+        const totalValue = rate / quantity;
+        if (valueInput) {
+            valueInput.value = totalValue;
+        }
+        calculateTotalOrderValue();
+    }
+}
+
+// Calculate values for all item rows
+// function calculateAllItemValues() {
+//     document.querySelectorAll('.item-row').forEach(row => {
+//         const quantityInput = row.querySelector('.item-quantity');
+//         if (quantityInput) {
+//             calculateItemValue(quantityInput);
+//         }
+//         calculateTotalOrderValue();
+//     });
+//     calculateTotalOrderValue();
+// }
+
+// Calculate total order value
+function calculateTotalOrderValue() {
+    let totalOrderValue = 0;
+    document.querySelectorAll('.item-row').forEach(row => {
+        const valueInput = row.querySelector('.item-rate');
+        if (valueInput) {
+            const value = parseFloat(valueInput.value.replace(/[^0-9.-]+/g, "")) || 0;
+            totalOrderValue += value;
+        }
+    });
+
+    const totalOrderValueInput = document.getElementById('totalOrderValue');
+    if (totalOrderValueInput) {
+        totalOrderValueInput.value = '₦' + totalOrderValue.toFixed(2);
+    }
+}
+
+// Handle token number change - auto-fill stylist code
+function handleTokenNoChange() {
+    const tokenNo = document.getElementById('tokenNo').value;
+    const stylistCodeSelect = document.getElementById('saleOrderStylistCode');
+
+    if (!tokenNo || !stylistCodeSelect) return;
+
+    // Find matching token and set stylist code from customers database
+    if (typeof database !== 'undefined' && database) {
+        database.ref('customers').once('value', (snapshot) => {
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    const customer = childSnapshot.val();
+                    if (customer.tokenNo === tokenNo && customer.stylistCode) {
+                        stylistCodeSelect.value = customer.stylistCode;
+                        // Trigger stylist code change handler to update location
+                        handleStylistCodeChange();
+                    }
+                });
+            }
+        });
+    }
+}
+
+// Set default order date to today
+function setDefaultOrderDate() {
+    const orderDateInput = document.getElementById('orderDate');
+    if (orderDateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        orderDateInput.value = today;
+    }
+}
+
+// Handle sale order form submission
+function handleSaleOrderSubmission(e) {
+    e.preventDefault();
+
+    // Get main order details
+    const orderDate = document.getElementById('orderDate').value;
+    const location = document.getElementById('saleOrderLocation').value;
+
+    // Check if we're editing an existing order
+    const form = document.getElementById('saleOrderForm');
+    const editOrderId = form.getAttribute('data-edit-order-id');
+    const isEditMode = !!editOrderId;
+
+    // Get all item details from table
+    const itemRows = document.querySelectorAll('.item-row');
+    const items = [];
+    let isValid = true;
+
+    itemRows.forEach((row, index) => {
+        const itemName = row.querySelector('.item-name').value;
+        const itemCategory = row.querySelector('.item-category').value;
+        const quantity = parseFloat(row.querySelector('.item-quantity').value);
+        const distributor = row.querySelector('.item-distributor').value;
+        const rate = parseFloat(row.querySelector('.item-rate').value);
+
+        if (!itemName || !quantity || isNaN(rate)) {
+            showOrderMessage(`Please fill all required fields in row ${index + 1}!`, 'danger');
+            isValid = false;
+            return;
+        }
+
+        const value = rate / quantity;
+
+        items.push({
+            itemName: itemName,
+            itemCategory: itemCategory,
+            quantity: quantity,
+            distributor: distributor,
+            rate: rate,
+            value: value
+        });
+    });
+
+    // Validation
+    if (!orderDate || !location) {
+        showOrderMessage('Please fill all required fields!', 'danger');
+        return;
+    }
+
+    if (!isValid || items.length === 0) {
+        return;
+    }
+
+    // Calculate total order value
+    const totalOrderValue = items.reduce((sum, item) => sum + item.value, 0);
+
+    if (isEditMode) {
+        // Update existing order
+        const existingOrder = saleOrders.find(o => o.orderId === editOrderId);
+        if (existingOrder) {
+            // Update order properties
+            existingOrder.stylistCode = stylistCode;
+            existingOrder.tokenNo = tokenNo;
+            existingOrder.orderDate = orderDate;
+            existingOrder.paymentMethod = paymentMethod;
+            existingOrder.location = location;
+            existingOrder.remarks = remarks;
+            existingOrder.items = items;
+            existingOrder.totalValue = totalOrderValue;
+            existingOrder.lastModified = new Date().toISOString();
+
+            // Save updated order
+            updateSaleOrder(existingOrder);
+        } else {
+            showOrderMessage('Order not found for updating!', 'danger');
+        }
+    } else {
+        // Generate order ID
+        const orderId = 'SO-' + String(orderCounter).padStart(4, '0');
+        orderCounter++;
+
+        // Create order object
+        const newOrder = {
+            orderId: orderId,
+            orderDate: orderDate,
+            location: location,
+            items: items,
+            totalValue: totalOrderValue,
+            timestamp: new Date().toISOString()
+        };
+
+        // Save order
+        saveSaleOrder(newOrder);
+    }
+}
+
+// Clear order form
+function clearOrderForm() {
+    const form = document.getElementById('saleOrderForm');
+    if (form) {
+        const isEditMode = form.hasAttribute('data-edit-order-id');
+
+        // Reset form to create mode first
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn && isEditMode) {
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> Create Order';
+            submitBtn.classList.remove('btn-warning');
+            submitBtn.classList.add('btn-primary');
+        }
+
+        // Reset clear button to normal mode
+        const clearBtn = form.querySelector('#clearOrderBtn');
+        if (clearBtn && isEditMode) {
+            clearBtn.innerHTML = '<i class="fas fa-eraser"></i> Clear Form';
+            clearBtn.classList.remove('btn-outline-danger');
+            clearBtn.classList.add('btn-outline-secondary');
+        }
+
+        // Remove edit mode attributes
+        form.removeAttribute('data-edit-order-id');
+
+        // If we were in edit mode, go back to report section
+        if (isEditMode) {
+            showSection('sale-order-report');
+            return; // Don't clear form fields when canceling edit
+        }
+
+        // Reset main form fields
+        document.getElementById('saleOrderLocation').value = '';
+        document.getElementById('totalOrderValue').value = '';
+        setDefaultOrderDate();
+
+        // Clear all item rows except the first one totalOrderValue
+        const tbody = document.getElementById('itemsTableBody');
+        const rows = tbody.querySelectorAll('.item-row');
+
+        // Remove all rows except first
+        for (let i = rows.length - 1; i > 0; i--) {
+            rows[i].remove();
+        }
+
+        // Clear first row
+        if (rows.length > 0) {
+            const firstRow = rows[0];
+            firstRow.querySelector('.item-name').value = '';
+            firstRow.querySelector('.item-category').value = '';
+            firstRow.querySelector('.item-quantity').value = '1';
+            firstRow.querySelector('.item-distributor').value = '';
+            firstRow.querySelector('.item-rate').value = '';
+            firstRow.querySelector('.item-value').value = '';
+        }
+
+        updateRemoveButtonsState();
+    }
+}
+
+// Save sale order to Firebase/localStorage
+function saveSaleOrder(order) {
+    if (typeof database !== 'undefined' && database) {
+        // Save to Firebase
+        const newOrderRef = database.ref('saleOrders').push();
+        newOrderRef.set(order)
+            .then(() => {
+                showOrderMessage('Sale order created successfully!', 'success');
+                clearOrderForm();
+                loadSaleOrders();
+                updateOrderStatistics();
+            })
+            .catch((error) => {
+                console.error('Error saving sale order:', error);
+                showOrderMessage('Error saving order. Please try again.', 'danger');
+            });
+    } else {
+        // Fallback to localStorage
+        let orders = JSON.parse(localStorage.getItem('saleOrders')) || [];
+        orders.push(order);
+        localStorage.setItem('saleOrders', JSON.stringify(orders));
+        saleOrders = orders;
+
+        showOrderMessage('Sale order created successfully!', 'success');
+        clearOrderForm();
+        displaySaleOrders(saleOrders);
+        updateOrderStatistics();
+    }
+}
+
+// Update existing sale order in Firebase/localStorage
+function updateSaleOrder(order) {
+    if (typeof database !== 'undefined' && database) {
+        // Find the Firebase key for this order
+        database.ref('saleOrders').once('value', (snapshot) => {
+            let orderKey = null;
+            snapshot.forEach((childSnapshot) => {
+                if (childSnapshot.val().orderId === order.orderId) {
+                    orderKey = childSnapshot.key;
+                }
+            });
+
+            if (orderKey) {
+                // Update in Firebase
+                database.ref('saleOrders/' + orderKey).set(order)
+                    .then(() => {
+                        showOrderMessage('Sale order updated successfully!', 'success');
+                        clearOrderForm();
+                        loadSaleOrders(); // Reload to reflect changes
+                        updateOrderStatistics();
+                        // Switch back to report section after update
+                        setTimeout(() => {
+                            showSection('sale-order-report');
+                        }, 1000);
+                    })
+                    .catch((error) => {
+                        console.error('Error updating order:', error);
+                        showOrderMessage('Error updating order: ' + error.message, 'danger');
+                    });
+            } else {
+                showOrderMessage('Order not found in database!', 'danger');
+            }
+        }).catch((error) => {
+            console.error('Error finding order:', error);
+            showOrderMessage('Error finding order: ' + error.message, 'danger');
+        });
+    } else {
+        // Update in localStorage
+        const orderIndex = saleOrders.findIndex(o => o.orderId === order.orderId);
+        if (orderIndex !== -1) {
+            saleOrders[orderIndex] = order;
+            localStorage.setItem('saleOrders', JSON.stringify(saleOrders));
+
+            showOrderMessage('Sale order updated successfully!', 'success');
+            clearOrderForm();
+            displaySaleOrders(saleOrders);
+            updateOrderStatistics();
+            // Switch back to report section after update
+            setTimeout(() => {
+                showSection('sale-order-report');
+            }, 1000);
+        } else {
+            showOrderMessage('Order not found for updating!', 'danger');
+        }
+    }
+}
+
+// Load sale orders from Firebase/localStorage
+function loadSaleOrders() {
+    if (typeof database !== 'undefined' && database) {
+        database.ref('saleOrders').once('value', (snapshot) => {
+            saleOrders = [];
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    const order = childSnapshot.val();
+                    order.firebaseKey = childSnapshot.key;
+                    saleOrders.push(order);
+                });
+            }
+            displaySaleOrders(saleOrders);
+            updateOrderStatistics();
+            // console.log('Sale orders loaded from Firebase');
+        }).catch((error) => {
+            console.error('Error loading sale orders:', error);
+            loadSaleOrdersFromLocalStorage();
+        });
+    } else {
+        loadSaleOrdersFromLocalStorage();
+    }
+}
+
+// Fallback function to load orders from localStorage
+function loadSaleOrdersFromLocalStorage() {
+    const storedOrders = localStorage.getItem('saleOrders');
+    saleOrders = storedOrders ? JSON.parse(storedOrders) : [];
+    displaySaleOrders(saleOrders);
+    updateOrderStatistics();
+}
+
+// Display sale orders in the table
+function displaySaleOrders(orders) {
+    const tbody = document.getElementById('ordersTableBody');
+
+    if (!tbody) return;
+
+    if (orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No orders found</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = orders.map(order => {
+        if (order.items && Array.isArray(order.items) && order.items.length > 0) {
+            return order.items.map((item, idx) => `
+                <tr>
+                    ${idx === 0 ? `<td rowspan="${order.items.length}">${formatDateForDisplay(order.orderDate)}</td>` : ''}
+                    <td>${item.itemName}</td>
+                    <td>${item.itemCategory || '-'}</td>
+                    <td class="text-start">${item.quantity || 0}</td>
+                    <td class="text-start">₦${(item.rate || 0).toFixed(2)}</td>
+                    <td class="text-start"><strong>₦${(item.value || 0).toFixed(2)}</strong></td>
+                    ${idx === 0 ? `<td rowspan="${order.items.length}" class="text-center btn-group">
+                        <button class="btn btn-icon btn-outline-success" title="Edit" data-action="edit-order" data-order-id="${order.orderId}"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-icon btn-outline-danger" title="Delete" data-action="delete-order" data-order-id="${order.orderId}"><i class="fas fa-trash"></i></button>
+                    </td>` : ''}
+                </tr>
+            `).join('');
+        } else {
+            // fallback for old orders with no items array
+            return `
+                <tr>
+                    <td>${formatDateForDisplay(order.orderDate)}</td>
+                    <td>${order.itemName || '-'}</td>
+                    <td>${order.itemCategory || '-'}</td>
+                    <td class="text-center">${order.quantity || 0}</td>
+                    <td class="text-end">₦${(order.rate || 0).toFixed(2)}</td>
+                    <td class="text-end"><strong>₦${(order.value || 0).toFixed(2)}</strong></td>
+                    <td class="text-center btn-group">
+                        <button class="btn btn-icon btn-outline-success" title="Edit" data-action="edit-order" data-order-id="${order.orderId}"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-icon btn-outline-danger" title="Delete" data-action="delete-order" data-order-id="${order.orderId}"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        }
+    }).join('');
+}
+
+// Update order statistics
+function updateOrderStatistics() {
+    const today = new Date().toISOString().split('T')[0];
+    // console.log('Updating order statistics for date:', saleOrders);
+    // Calculate statistics
+    const todayOrders = saleOrders.filter(order => order.orderDate === today);
+    const todayRevenue = todayOrders.reduce((sum, order) => sum + (order.items ? order.items.reduce((s, item) => s + (item.value || 0), 0) : 0), 0);
+    const totalRevenue = saleOrders.reduce((sum, order) => sum + (order.items ? order.items.reduce((s, item) => s + (item.value || 0), 0) : 0), 0);
+    const averageOrderValue = saleOrders.length > 0 ? totalRevenue / saleOrders.length : 0;
+    // console.log('Order statistics updated todays orders:', todayOrders.length, 'today revenue: ₦', todayRevenue.toFixed(2));
+    // console.log('Total orders:', saleOrders.length, 'total revenue: ₦', totalRevenue.toFixed(2), 'average order value: ₦', averageOrderValue.toFixed(2));
+    // Update form section stats
+    const todayOrdersEl = document.getElementById('todayOrders');
+    const todayRevenueEl = document.getElementById('todayRevenue');
+    const pendingOrdersFormEl = document.getElementById('pendingOrdersForm');
+    const completedOrdersFormEl = document.getElementById('completedOrdersForm');
+
+    if (todayOrdersEl) todayOrdersEl.textContent = todayOrders.length;
+    if (todayRevenueEl) todayRevenueEl.textContent = '₦' + todayRevenue.toFixed(2);
+    if (pendingOrdersFormEl) pendingOrdersFormEl.textContent = saleOrders.length; // All orders for now
+    if (completedOrdersFormEl) completedOrdersFormEl.textContent = todayOrders.length;
+
+    // Update report section stats
+    const totalOrdersReportEl = document.getElementById('totalOrdersReport');
+    const totalRevenueReportEl = document.getElementById('totalRevenueReport');
+    const averageOrderValueEl = document.getElementById('averageOrderValue');
+    const topProductEl = document.getElementById('topProduct');
+
+    if (totalOrdersReportEl) totalOrdersReportEl.textContent = saleOrders.length;
+    if (totalRevenueReportEl) totalRevenueReportEl.textContent = '₦' + totalRevenue.toFixed(2);
+    if (averageOrderValueEl) averageOrderValueEl.textContent = '₦' + averageOrderValue.toFixed(2);
+
+    // Find top product
+    if (topProductEl) {
+        const itemCounts = {};
+        saleOrders.forEach(order => {
+            if (order.items && Array.isArray(order.items)) {
+                order.items.forEach(item => {
+                    if (item.itemName) {
+                        itemCounts[item.itemName] = (itemCounts[item.itemName] || 0) + (item.quantity || 0);
+                    }
+                });
+            } else if (order.itemName) {
+                // fallback for old orders
+                itemCounts[order.itemName] = (itemCounts[order.itemName] || 0) + (order.quantity || 0);
+            }
+        });
+
+        const topItem = Object.keys(itemCounts).reduce((a, b) =>
+            itemCounts[a] > itemCounts[b] ? a : b, '-'
+        );
+
+        topProductEl.textContent = topItem || '-';
+    }
+}
+
+// Show order result message
+function showOrderMessage(message, type) {
+    const resultDiv = document.getElementById('orderResult');
+    const alertDiv = resultDiv.querySelector('.alert');
+
+    if (alertDiv && resultDiv) {
+        alertDiv.className = `alert alert-${type}`;
+        alertDiv.textContent = message;
+        resultDiv.style.display = 'block';
+
+        setTimeout(() => {
+            resultDiv.style.display = 'none';
+        }, 3000);
+    }
+}
+
+// Format date for display
+function formatDateForDisplay(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB');
+}
+
+// Filter sale orders
+function filterSaleOrders() {
+    const search = document.getElementById('orderSearch').value.toLowerCase();
+    const paymentFilter = document.getElementById('paymentMethodFilter').value;
+    const fromDate = document.getElementById('orderFromDate').value;
+    const toDate = document.getElementById('orderToDate').value;
+    const orderStatusFilter = document.getElementById('orderStatusFilter').value;
+
+    let filteredOrders = saleOrders.filter(order => {
+        const stylistCode = order.stylistCode ? order.stylistCode.toLowerCase() : '';
+        const tokenNo = order.tokenNo ? order.tokenNo.toLowerCase() : '';
+        const orderId = order.orderId ? order.orderId.toLowerCase() : '';
+        // const orderStatus = order.orderStatus ? order.orderStatus.toLowerCase() : '';
+        // For itemName, check all items if present
+        let itemNameMatch = false;
+        if (order.items && Array.isArray(order.items)) {
+            itemNameMatch = order.items.some(item => (item.itemName || '').toLowerCase().includes(search));
+        } else {
+            itemNameMatch = (order.itemName || '').toLowerCase().includes(search);
+        }
+
+        const matchesSearch = !search ||
+            stylistCode.includes(search) ||
+            tokenNo.includes(search) ||
+            itemNameMatch ||
+            // orderStatus.includes(orderStatusFilter ? orderStatusFilter.toLowerCase() : '') ||
+            orderId.includes(search);
+
+        const matchesPayment = !paymentFilter || order.paymentMethod === paymentFilter;
+        const matchesFromDate = !fromDate || order.orderDate >= fromDate;
+        const matchesToDate = !toDate || order.orderDate <= toDate;
+        // const matchesOrderStatus = !orderStatusFilter || orderStatus === orderStatusFilter.toLowerCase();
+        // console.log('Filtering order:', order.orderId, 'matchesSearch:', matchesSearch, 'matchesPayment:', matchesPayment, 'matchesFromDate:', matchesFromDate, 'matchesToDate:', matchesToDate);
+        return matchesSearch && matchesPayment && matchesFromDate && matchesToDate;
+    });
+    // console.log('Filtered orders count:', filteredOrders);
+    displaySaleOrders(filteredOrders);
+}
+
+// Clear order filters
+function clearOrderFilters() {
+    document.getElementById('orderSearch').value = '';
+    document.getElementById('paymentMethodFilter').value = '';
+    document.getElementById('orderFromDate').value = '';
+    document.getElementById('orderToDate').value = '';
+    document.getElementById('orderStatusFilter').value = '';
+    displaySaleOrders(saleOrders);
+}
+
+// Export sale orders to CSV
+function exportSaleOrders() {
+    if (saleOrders.length === 0) {
+        alert('No orders to export!');
+        return;
+    }
+
+    const csv = [
+        ['Order ID', 'Date', 'Stylist Code', 'Token No', 'Item Name', 'Category', 'Quantity', 'Rate', 'Value', 'Payment Method', 'Location', 'Remarks']
+    ];
+
+    saleOrders.forEach(order => {
+        csv.push([
+            order.orderId,
+            order.orderDate,
+            order.stylistCode,
+            order.tokenNo,
+            order.itemName,
+            order.itemCategory || '',
+            order.quantity,
+            order.rate,
+            order.value,
+            order.paymentMethod,
+            order.location || '',
+            order.remarks || ''
+        ]);
+    });
+
+    const csvContent = csv.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sale_orders_' + new Date().toISOString().split('T')[0] + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+// Order management functions
+function viewSaleOrder(orderId) {
+    const order = saleOrders.find(o => o.orderId === orderId);
+    if (order) {
+        const details = `
+Order Details:
+
+Order ID: ${order.orderId}
+Date: ${order.orderDate}
+Stylist Code: ${order.stylistCode}
+Token No: ${order.tokenNo}
+Item: ${order.itemName}
+Category: ${order.itemCategory || '-'}
+Quantity: ${order.quantity}
+Rate: ₦${order.rate.toFixed(2)}
+Total Value: ₦${order.value.toFixed(2)}
+Payment Method: ${order.paymentMethod}
+Location: ${order.location || '-'}
+Remarks: ${order.remarks || 'None'}
+        `;
+        alert(details);
+    }
+}
+
+function editSaleOrder(orderId) {
+    const order = saleOrders.find(o => o.orderId === orderId);
+    if (!order) {
+        alert('Order not found!');
+        return;
+    }
+
+    // Switch to sale order form section
+    showSection('sale-order-form');
+
+    // Populate simplified main form fields - only location and date
+    document.getElementById('orderDate').value = order.orderDate || '';
+    document.getElementById('saleOrderLocation').value = order.location || '';
+
+    // Clear existing item rows
+    const tbody = document.getElementById('itemsTableBody');
+    tbody.innerHTML = '';
+
+    // Populate items table
+    if (order.items && Array.isArray(order.items)) {
+        order.items.forEach((item, index) => {
+            const newRow = document.createElement('tr');
+            newRow.className = 'item-row';
+            newRow.setAttribute('data-row', index + 1);
+
+            newRow.innerHTML = `
+                <td>
+                    <input type="text" class="form-control item-name" name="itemName[]" required 
+                           list="itemNameList" placeholder="Select or enter item name" value="${item.itemName || ''}">
+                </td>
+                <td>
+                    <input type="text" class="form-control item-category" name="itemCategory[]" readonly
+                           placeholder="Auto-filled" style="background-color: #f8f9fa;" value="${item.itemCategory || ''}">
+                </td>
+                <td>
+                    <input type="number" class="form-control item-quantity" name="quantity[]" required
+                           min="1" step="1" placeholder="1" value="${item.quantity || 1}">
+                </td>
+                <td>
+                    <input type="text" class="form-control item-distributor" name="distributor[]"
+                           placeholder="Enter distributor" value="${item.distributor || ''}">
+                </td>
+                <td>
+                    <input type="number" class="form-control item-rate" name="rate[]" readonly
+                           step="0.01" placeholder="Auto-filled" style="background-color: #f8f9fa;" value="${item.rate || 0}">
+                </td>
+                <td>
+                    <input type="text" class="form-control item-value" name="value[]"
+                           placeholder="Enter value" value="${item.value || 0}">
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+
+            tbody.appendChild(newRow);
+        });
+    } else {
+        // Add one empty row if no items
+        addNewItemRow();
+    }
+
+    // Setup event listeners for new rows
+    setupItemRowListeners();
+    updateRemoveButtonsState();
+
+    // Change form to edit mode
+    const form = document.getElementById('saleOrderForm');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Update Order';
+        submitBtn.classList.remove('btn-primary');
+        submitBtn.classList.add('btn-warning');
+    }
+
+    // Add cancel button in edit mode
+    const clearBtn = form.querySelector('#clearOrderBtn');
+    if (clearBtn) {
+        clearBtn.innerHTML = '<i class="fas fa-times me-2"></i>Cancel Edit';
+        clearBtn.classList.remove('btn-outline-secondary');
+        clearBtn.classList.add('btn-outline-danger');
+    }
+
+    // Store the order ID being edited
+    form.setAttribute('data-edit-order-id', orderId);
+
+    // Show success message
+    showOrderMessage(`Editing order ${orderId}. Make changes and click "Update Order" to save.`, 'info');
+
+    // Scroll to top of form
+    document.getElementById('sale-order-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+function deleteSaleOrder(orderId) {
+    if (confirm('Are you sure you want to delete this sale order?')) {
+        if (typeof database !== 'undefined' && database) {
+            // Delete from Firebase
+            const order = saleOrders.find(o => o.orderId === orderId);
+            if (order && order.firebaseKey) {
+                database.ref('saleOrders/' + order.firebaseKey).remove()
+                    .then(() => {
+                        loadSaleOrders();
+                        showOrderMessage('Order deleted successfully', 'success');
+                    })
+                    .catch((error) => {
+                        console.error('Error deleting order:', error);
+                        showOrderMessage('Error deleting order', 'danger');
+                    });
+            }
+        } else {
+            // Delete from localStorage
+            saleOrders = saleOrders.filter(order => order.orderId !== orderId);
+            localStorage.setItem('saleOrders', JSON.stringify(saleOrders));
+            displaySaleOrders(saleOrders);
+            updateOrderStatistics();
+            showOrderMessage('Order deleted successfully', 'success');
+        }
+    }
+}
+
+// // Handle stylist code change - update token numbers
+// function handleStylistCodeChange() {
+//     const stylistCode = document.getElementById('stylistCode').value;
+//     const tokenNoSelect = document.getElementById('tokenNo');
+
+//     if (!stylistCode || !tokenNoSelect) return;
+
+//     // Clear current token options
+//     tokenNoSelect.innerHTML = '<option value="">Select Token No</option>';
+
+//     // Find matching stylist and populate their tokens
+//     if (typeof database !== 'undefined' && database) {
+//         database.ref('stylists').once('value', (snapshot) => {
+//             if (snapshot.exists()) {
+//                 snapshot.forEach((childSnapshot) => {
+//                     const stylist = childSnapshot.val();
+//                     if (stylist.stylistCode === stylistCode && stylist.tokenNo) {
+//                         const option = document.createElement('option');
+//                         option.value = stylist.tokenNo;
+//                         option.textContent = stylist.tokenNo;
+//                         tokenNoSelect.appendChild(option);
+//                     }
+//                 });
+//             }
+//         });
+//     } else {
+//         // Fallback to localStorage
+//         const storedStylists = localStorage.getItem('stylists');
+//         if (storedStylists) {
+//             const stylists = JSON.parse(storedStylists);
+//             const currentStylistCode = document.getElementById('saleOrderStylistCode').value;
+//             stylists.forEach(stylist => {
+//                 if (stylist.stylistCode === currentStylistCode && stylist.tokenNo) {
+//                     const option = document.createElement('option');
+//                     option.value = stylist.tokenNo;
+//                     option.textContent = stylist.tokenNo;
+//                     tokenNoSelect.appendChild(option);
+//                 }
+//             });
+//         }
+//     }
+// }
+
+// // Handle token number change - auto-fill stylist code
+// function handleTokenNoChange() {
+//     const tokenNo = document.getElementById('tokenNo').value;
+//     const stylistCodeSelect = document.getElementById('saleOrderStylistCode');
+
+//     if (!tokenNo || !stylistCodeSelect) return;
+
+//     // Find matching token and set stylist code
+//     if (typeof database !== 'undefined' && database) {
+//         database.ref('stylists').once('value', (snapshot) => {
+//             if (snapshot.exists()) {
+//                 snapshot.forEach((childSnapshot) => {
+//                     const stylist = childSnapshot.val();
+//                     if (stylist.tokenNo === tokenNo) {
+//                         stylistCodeSelect.value = stylist.stylistCode || '';
+//                         // Also auto-fill location
+//                         const locationSelect = document.getElementById('location');
+//                         if (locationSelect) {
+//                             locationSelect.value = stylist.location || '';
+//                         }
+//                     }
+//                 });
+//             }
+//         });
+//     } else {
+//         // Fallback to localStorage
+//         const storedStylists = localStorage.getItem('stylists');
+//         if (storedStylists) {
+//             const stylists = JSON.parse(storedStylists);
+//             const matchingStylist = stylists.find(stylist => stylist.tokenNo === tokenNo);
+//             if (matchingStylist) {
+//                 stylistCodeSelect.value = matchingStylist.stylistCode || '';
+//                 const locationSelect = document.getElementById('location');
+//                 if (locationSelect) {
+//                     locationSelect.value = matchingStylist.location || '';
+//                 }
+//             }
+//         }
+//     }
+// }
+
+// Handle settings item name change for auto-fill modification
+function handleSettingsItemNameChange() {
+    const itemName = document.getElementById('settingsItemName').value;
+    const deleteBtn = document.getElementById('deleteItemBtn');
+
+    if (itemName) {
+        const existingItem = orderItems.find(item => item.itemName.toLowerCase() === itemName.toLowerCase());
+
+        if (existingItem) {
+            // Auto-fill form for modification
+            document.getElementById('settingsItemCategory').value = existingItem.itemCategory || '';
+            // document.getElementById('settingsItemPrice').value = existingItem.rate || '';
+            document.getElementById('settingsItemDescription').value = existingItem.description || '';
+
+            // Show delete button for existing items
+            if (deleteBtn) {
+                deleteBtn.style.display = 'inline-block';
+                deleteBtn.setAttribute('data-item-name', itemName);
+            }
+        } else {
+            // Hide delete button for new items
+            if (deleteBtn) {
+                deleteBtn.style.display = 'none';
+            }
+        }
+    } else {
+        // Hide delete button when no item selected
+        if (deleteBtn) {
+            deleteBtn.style.display = 'none';
+        }
+    }
+}
+
+// Update settings datalists
+function updateSettingsDataLists() {
+    // Update item names datalist
+    const itemNameList = document.getElementById('settingsItemNameList');
+    if (itemNameList) {
+        itemNameList.innerHTML = '';
+        orderItems.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.itemName;
+            itemNameList.appendChild(option);
+        });
+    }
+
+    // Update categories datalist
+    const categoryList = document.getElementById('settingsCategoryList');
+    if (categoryList) {
+        categoryList.innerHTML = '';
+        const uniqueCategories = [...new Set(orderItems.map(item => item.itemCategory).filter(cat => cat))];
+        uniqueCategories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category;
+            categoryList.appendChild(option);
+        });
+    }
+}
+
+// Settings - Add New Item Management Functions
+function showAddItemForm() {
+    // console.log('showAddItemForm called');
+    const addItemForm = document.getElementById('addItemForm');
+    if (addItemForm) {
+        addItemForm.style.display = 'block';
+        // console.log('Add item form shown');
+    } else {
+        console.error('addItemForm element not found');
+    }
+}
+
+// Delete current item being modified
+function deleteCurrentItem() {
+    const itemName = document.getElementById('deleteItemBtn').getAttribute('data-item-name');
+
+    if (!itemName) {
+        alert('No item selected for deletion!');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to delete "${itemName}"?`)) {
+        return;
+    }
+
+    const itemIndex = orderItems.findIndex(item => item.itemName.toLowerCase() === itemName.toLowerCase());
+
+    if (itemIndex === -1) {
+        alert('Item not found!');
+        return;
+    }
+
+    const item = orderItems[itemIndex];
+
+    if (typeof database !== 'undefined' && database && item.firebaseKey) {
+        // Delete from Firebase
+        database.ref('orderItems/' + item.firebaseKey).remove()
+            .then(() => {
+                alert('Item deleted successfully!');
+                cancelAddItem();
+                loadOrderItems();
+            })
+            .catch((error) => {
+                console.error('Error deleting item:', error);
+                alert('Error deleting item. Please try again.');
+            });
+    } else {
+        // Delete from localStorage
+        orderItems.splice(itemIndex, 1);
+        localStorage.setItem('orderItems', JSON.stringify(orderItems));
+        updateItemNameDatalist();
+        updateSettingsDataLists();
+        cancelAddItem();
+        alert('Item deleted successfully!');
+    }
+}
+
+function cancelAddItem() {
+    // console.log('cancelAddItem called');
+    const addItemForm = document.getElementById('addItemForm');
+    const newItemForm = document.getElementById('newItemForm');
+
+    if (addItemForm) {
+        addItemForm.style.display = 'none';
+    }
+
+    if (newItemForm) {
+        newItemForm.reset();
+    }
+}
+
+function saveNewItem() {
+    const itemName = document.getElementById('settingsItemName').value;
+    const itemCategory = document.getElementById('settingsItemCategory').value;
+    // const itemPrice = parseFloat(document.getElementById('settingsItemPrice').value) || 0;
+    const itemDescription = document.getElementById('settingsItemDescription').value;
+
+    if (!itemName) {
+        alert('Please enter item name!');
+        return;
+    }
+
+    // Check if item already exists (for modification)
+    const existingItemIndex = orderItems.findIndex(item => item.itemName.toLowerCase() === itemName.toLowerCase());
+
+    if (existingItemIndex !== -1) {
+        // Update existing item
+        const existingItem = orderItems[existingItemIndex];
+        existingItem.itemCategory = itemCategory;
+        // existingItem.rate = itemPrice;
+        existingItem.description = itemDescription;
+
+        if (typeof database !== 'undefined' && database && existingItem.firebaseKey) {
+            database.ref('orderItems/' + existingItem.firebaseKey).update(existingItem)
+                .then(() => {
+                    alert('Item updated successfully!');
+                    cancelAddItem();
+                    loadOrderItems();
+                })
+                .catch((error) => {
+                    console.error('Error updating item:', error);
+                    alert('Error updating item. Please try again.');
+                });
+        } else {
+            localStorage.setItem('orderItems', JSON.stringify(orderItems));
+            updateItemNameDatalist();
+            cancelAddItem();
+            alert('Item updated successfully!');
+        }
+    } else {
+        // Create new item
+        const newItem = {
+            id: Date.now(),
+            itemName: itemName,
+            itemCategory: itemCategory,
+            // rate: itemPrice,
+            description: itemDescription
+        };
+
+        if (typeof database !== 'undefined' && database) {
+            database.ref('orderItems').push(newItem)
+                .then(() => {
+                    alert('Item saved successfully!');
+                    cancelAddItem();
+                    loadOrderItems();
+                })
+                .catch((error) => {
+                    console.error('Error saving item:', error);
+                    alert('Error saving item. Please try again.');
+                });
+        } else {
+            orderItems.push(newItem);
+            localStorage.setItem('orderItems', JSON.stringify(orderItems));
+            updateItemNameDatalist();
+            cancelAddItem();
+            alert('Item saved successfully!');
+        }
+    }
+}
+
+// Centralized Event Delegation System for all data-action attributes
+document.addEventListener('click', function (e) {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+
+    const action = target.getAttribute('data-action');
+    if (action) {
+        e.preventDefault();
+
+        switch (action) {
+            // User Management Actions
+            case 'edit-user':
+                const userKey1 = target.getAttribute('data-user-key');
+                if (userKey1) editUser(userKey1);
+                break;
+
+            case 'delete-user':
+                const userKey2 = target.getAttribute('data-user-key');
+                if (userKey2) deleteUser(userKey2);
+                break;
+
+            case 'save-user-changes':
+                saveUserChanges();
+                break;
+
+            case 'edit-user-mgmt':
+                const userKey3 = target.getAttribute('data-user-key');
+                if (userKey3) editUser(userKey3);
+                break;
+
+            case 'change-password':
+                const userKey4 = target.getAttribute('data-user-key');
+                if (userKey4) showChangePasswordModal(userKey4);
+                break;
+
+            case 'toggle-user-status':
+                const userKey5 = target.getAttribute('data-user-key');
+                const userStatus = target.getAttribute('data-user-status');
+                if (userKey5 && userStatus) toggleUserStatus(userKey5, userStatus);
+                break;
+
+            case 'delete-user-mgmt':
+                const userKey6 = target.getAttribute('data-user-key');
+                const userName = target.getAttribute('data-user-name');
+                if (userKey6 && userName) deleteUser(userKey6, userName);
+                break;
+
+            // Stylist Management Actions
+            case 'save-stylist-changes':
+                saveStylistChanges();
+                break;
+
+            case 'edit-stylist':
+                const stylistIndex = target.getAttribute('data-stylist-index');
+                if (stylistIndex) editStylist(parseInt(stylistIndex));
+                break;
+
+            // Export Functions
+            case 'export-mismatches':
+                exportMismatches();
+                break;
+
+            // Pagination Actions
+            case 'change-page':
+                const page = target.getAttribute('data-page');
+                if (page) changePaymentPage(parseInt(page));
+                break;
+
+            // Security Actions
+            case 'close-security-popup':
+                target.parentElement.parentElement.remove();
+                target.parentElement.remove();
+                break;
+
+            // Sale Order Actions
+            case 'view-order':
+                const orderId1 = target.getAttribute('data-order-id');
+                if (orderId1) viewSaleOrder(orderId1);
+                break;
+
+            case 'edit-order':
+                const orderId2 = target.getAttribute('data-order-id');
+                if (orderId2) editSaleOrder(orderId2);
+                break;
+
+            case 'delete-order':
+                const orderId3 = target.getAttribute('data-order-id');
+                if (orderId3) deleteSaleOrder(orderId3);
+                break;
+        }
+    }
 });
 
