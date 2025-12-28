@@ -751,11 +751,11 @@ async function handleLogin(event) {
 
                 const userKey = Object.keys(users)[0];
                 const user = users[userKey];
-                console.log('User record retrieved:', user);
-                console.log('Checking password for password:', password);
-                console.log('Checking user password:', user.password);
+                // console.log('User record retrieved:', user);
+                // console.log('Checking password for password:', password);
+                // console.log('Checking user password:', user.password);
                 const enteredPasswordHash = await hashPassword(password);
-                console.log('Password check - Hash match:', user.password === enteredPasswordHash, 'Plain match:', user.password === password);
+                // console.log('Password check - Hash match:', user.password === enteredPasswordHash, 'Plain match:', user.password === password);
                 // Allow login with either hashed or plain text password (for migration/testing)
                 if (user.password !== enteredPasswordHash && user.password !== password) {
                     showLoginError('Invalid username or password');
@@ -8143,7 +8143,7 @@ function loadStylistReport() {
 
 // Generate stylist report based on filters
 function generateStylistReport(action) {
-    console.log('generateStylistReport function called', action ? 'with action: ' + action : '');
+    // console.log('generateStylistReport function called', action ? 'with action: ' + action : '');
 
     const reportDate = document.getElementById('reportDate');
     const reportLocation = document.getElementById('reportLocationFilter');
@@ -8156,7 +8156,7 @@ function generateStylistReport(action) {
 
     const reportDateValue = reportDate ? reportDate.value : '';
     const reportLocationValue = reportLocation ? reportLocation.value : '';
-    console.log("filter values:", { reportDateValue, reportLocationValue });
+    // console.log("filter values:", { reportDateValue, reportLocationValue });
     // Show loading state
     tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Loading data...</td></tr>';
 
@@ -8171,9 +8171,9 @@ function generateStylistReport(action) {
     let stylistsData = {};
     stylistsRef.once('value').then(snapshot => {
         const stylists = snapshot.val();
-        console.log('Fetched stylists data:', stylists);
+        // console.log('Fetched stylists data:', stylists);
         Object.keys(stylists).forEach((stylistId, index) => {
-            console.log('Processing stylist:', stylistId, stylists[stylistId]);
+            // console.log('Processing stylist:', stylistId, stylists[stylistId]);
             const stylist = stylists[stylistId];
             const stCode = stylist.stylistCode || stylist.stylishCode || stylist.code;
             if (stCode) {
@@ -8493,7 +8493,7 @@ let saleOrderSystemInitialized = false; // Track if sale order system is already
 function initializeSaleOrderSystem() {
     // Prevent multiple initializations
     if (saleOrderSystemInitialized) {
-        console.log('Sale Order System already initialized, skipping...');
+        // console.log('Sale Order System already initialized, skipping...');
         return;
     }
     saleOrderSystemInitialized = true;
@@ -8703,7 +8703,7 @@ function loadOrderItems() {
                 if (snapshot.exists()) {
                     snapshot.forEach((childSnapshot) => {
                         const item = childSnapshot.val();
-                        item.firebaseKey = childSnapshot.key; // Store Firebase key for deletion
+                        item.orderId = childSnapshot.key; // Store Firebase key for deletion
                         orderItems.push(item);
 
                         const option = document.createElement('option');
@@ -8961,7 +8961,7 @@ function addNewItemRow() {
         </td>
         <td>
             <input type="text" class="form-control item-distributor" name="distributor[]"
-                   placeholder="Enter distributor">
+            list="distributorList" placeholder="Enter distributor">
         </td>
         <td>
             <input type="number" class="form-control item-rate" name="rate[]"
@@ -9173,15 +9173,18 @@ function handleSaleOrderSubmission(e) {
 
     if (isEditMode) {
         // Update existing order
+        console.log('Updating existing order with ID:', editOrderId);
+        console.log('order to update:', saleOrders);
         const existingOrder = saleOrders.find(o => o.orderId === editOrderId);
+        console.log('Editing existing order:', existingOrder);
         if (existingOrder) {
             // Update order properties
-            existingOrder.stylistCode = stylistCode;
-            existingOrder.tokenNo = tokenNo;
+            // existingOrder.stylistCode = stylistCode;
+            // existingOrder.tokenNo = tokenNo;
             existingOrder.orderDate = orderDate;
-            existingOrder.paymentMethod = paymentMethod;
+            // existingOrder.paymentMethod = paymentMethod;
             existingOrder.location = location;
-            existingOrder.remarks = remarks;
+            // existingOrder.remarks = remarks;
             existingOrder.items = items;
             existingOrder.totalValue = totalOrderValue;
             existingOrder.lastModified = new Date().toISOString();
@@ -9193,7 +9196,7 @@ function handleSaleOrderSubmission(e) {
         }
     } else {
         // Generate order ID
-        const orderId = 'SO-' + String(orderCounter).padStart(4, '0');
+        const orderId = 'SO_' + Date.now()
         orderCounter++;
 
         // Create order object
@@ -9207,7 +9210,18 @@ function handleSaleOrderSubmission(e) {
         };
 
         // Save order
-        saveSaleOrder(newOrder);
+        saveToFirebaseAndLocal('saleOrders', newOrder.orderId, newOrder)
+            .then(() => {
+                showOrderMessage('Sale order created successfully!', 'success');
+                clearOrderForm();
+                loadSaleOrders();
+                updateOrderStatistics();
+            })
+            .catch((error) => {
+                console.error('Error saving sale order:', error);
+                showOrderMessage('Error saving order. Please try again.', 'danger');
+            });
+        // saveSaleOrder(newOrder);
     }
 }
 
@@ -9366,7 +9380,7 @@ function loadSaleOrders() {
             if (snapshot.exists()) {
                 snapshot.forEach((childSnapshot) => {
                     const order = childSnapshot.val();
-                    order.firebaseKey = childSnapshot.key;
+                    order.orderId = childSnapshot.key;
                     saleOrders.push(order);
                 });
             }
@@ -9403,18 +9417,27 @@ function displaySaleOrders(orders) {
 
     tbody.innerHTML = orders.map(order => {
         if (order.items && Array.isArray(order.items) && order.items.length > 0) {
+            // ${ idx === 0 ? `<td rowspan="${order.items.length}">${formatDateForDisplay(order.orderDate)}</td>` : '' }
+            // ${
+            //     idx === 0 ? `<td rowspan="${order.items.length}" class="text-center btn-group">
+            //             <button class="btn btn-icon btn-outline-success" title="Edit" data-action="edit-order" data-order-id="${order.orderId}"><i class="fas fa-edit"></i></button>
+            //             <button class="btn btn-icon btn-outline-danger" title="Delete" data-action="delete-order" data-order-id="${order.orderId}"><i class="fas fa-trash"></i></button>
+            //         </td>` : ''
+            // }
+            // console.log('Displaying order with items:', order);
+            // console.log('Displaying order with items:', order.orderId);
             return order.items.map((item, idx) => `
                 <tr>
-                    ${idx === 0 ? `<td rowspan="${order.items.length}">${formatDateForDisplay(order.orderDate)}</td>` : ''}
+                    <td>${formatDateForDisplay(order.orderDate)}</td>
                     <td>${item.itemName}</td>
                     <td>${item.itemCategory || '-'}</td>
                     <td class="text-start">${item.quantity || 0}</td>
                     <td class="text-start">₦${(item.rate || 0).toFixed(2)}</td>
                     <td class="text-start"><strong>₦${(item.value || 0).toFixed(2)}</strong></td>
-                    ${idx === 0 ? `<td rowspan="${order.items.length}" class="text-center btn-group">
+                    <td class="text-center btn-group">
                         <button class="btn btn-icon btn-outline-success" title="Edit" data-action="edit-order" data-order-id="${order.orderId}"><i class="fas fa-edit"></i></button>
                         <button class="btn btn-icon btn-outline-danger" title="Delete" data-action="delete-order" data-order-id="${order.orderId}"><i class="fas fa-trash"></i></button>
-                    </td>` : ''}
+                    </td>
                 </tr>
             `).join('');
         } else {
@@ -9629,6 +9652,8 @@ Remarks: ${order.remarks || 'None'}
 }
 
 function editSaleOrder(orderId) {
+    // console.log('Editing sale order with ID:', orderId);
+    // console.log('Current sale orders:', saleOrders);
     const order = saleOrders.find(o => o.orderId === orderId);
     if (!order) {
         alert('Order not found!');
@@ -9645,7 +9670,7 @@ function editSaleOrder(orderId) {
     // Clear existing item rows
     const tbody = document.getElementById('itemsTableBody');
     tbody.innerHTML = '';
-
+    console.log('Populating item rows for order:', order);
     // Populate items table
     if (order.items && Array.isArray(order.items)) {
         order.items.forEach((item, index) => {
@@ -9668,14 +9693,14 @@ function editSaleOrder(orderId) {
                 </td>
                 <td>
                     <input type="text" class="form-control item-distributor" name="distributor[]"
-                           placeholder="Enter distributor" value="${item.distributor || ''}">
+                    list="distributorList" placeholder="Enter distributor" value="${item.distributor || ''}">
                 </td>
                 <td>
-                    <input type="number" class="form-control item-rate" name="rate[]" readonly
-                           step="0.01" placeholder="Auto-filled" style="background-color: #f8f9fa;" value="${item.rate || 0}">
+                    <input type="number" class="form-control item-rate" name="rate[]"
+                           step="1" placeholder="Auto-filled" style="background-color: #f8f9fa;" value="${item.rate || 0}">
                 </td>
                 <td>
-                    <input type="text" class="form-control item-value" name="value[]"
+                    <input type="text" class="form-control item-value" name="value[]" readonly step="1"
                            placeholder="Enter value" value="${item.value || 0}">
                 </td>
                 <td>
@@ -9687,6 +9712,7 @@ function editSaleOrder(orderId) {
 
             tbody.appendChild(newRow);
         });
+        calculateTotalOrderValue();
     } else {
         // Add one empty row if no items
         addNewItemRow();
@@ -9728,8 +9754,8 @@ function deleteSaleOrder(orderId) {
         if (typeof database !== 'undefined' && database) {
             // Delete from Firebase
             const order = saleOrders.find(o => o.orderId === orderId);
-            if (order && order.firebaseKey) {
-                database.ref('saleOrders/' + order.firebaseKey).remove()
+            if (order && order.orderId) {
+                database.ref('saleOrders/' + order.orderId).remove()
                     .then(() => {
                         loadSaleOrders();
                         showOrderMessage('Order deleted successfully', 'success');
@@ -9927,9 +9953,9 @@ function deleteCurrentItem() {
 
     const item = orderItems[itemIndex];
 
-    if (typeof database !== 'undefined' && database && item.firebaseKey) {
+    if (typeof database !== 'undefined' && database && item.orderId) {
         // Delete from Firebase
-        database.ref('orderItems/' + item.firebaseKey).remove()
+        database.ref('orderItems/' + item.orderId).remove()
             .then(() => {
                 alert('Item deleted successfully!');
                 cancelAddItem();
@@ -9985,8 +10011,8 @@ function saveNewItem() {
         // existingItem.rate = itemPrice;
         existingItem.description = itemDescription;
 
-        if (typeof database !== 'undefined' && database && existingItem.firebaseKey) {
-            database.ref('orderItems/' + existingItem.firebaseKey).update(existingItem)
+        if (typeof database !== 'undefined' && database && existingItem.orderId) {
+            database.ref('orderItems/' + existingItem.orderId).update(existingItem)
                 .then(() => {
                     alert('Item updated successfully!');
                     cancelAddItem();
