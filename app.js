@@ -42,6 +42,8 @@ async function hashPassword(password) {
     const buffer = await window.crypto.subtle.digest('SHA-256', encoded);
     return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
+// const passwordSalt = hashPassword('jaysethia');
+// console.log('Password salt initialized', passwordSalt);
 
 // Secure event binding for password button
 document.addEventListener('DOMContentLoaded', function () {
@@ -749,9 +751,11 @@ async function handleLogin(event) {
 
                 const userKey = Object.keys(users)[0];
                 const user = users[userKey];
-
+                console.log('User record retrieved:', user);
+                console.log('Checking password for password:', password);
+                console.log('Checking user password:', user.password);
                 const enteredPasswordHash = await hashPassword(password);
-                // console.log('Password check - Hash match:', user.password === enteredPasswordHash, 'Plain match:', user.password === password);
+                console.log('Password check - Hash match:', user.password === enteredPasswordHash, 'Plain match:', user.password === password);
                 // Allow login with either hashed or plain text password (for migration/testing)
                 if (user.password !== enteredPasswordHash && user.password !== password) {
                     showLoginError('Invalid username or password');
@@ -1738,7 +1742,7 @@ async function saveUserChanges() {
             location: location,
             status: status,
             username: username.toLowerCase(),
-            password: await hashPassword(password),
+            password: password,//await hashPassword(password),
             accessFields: selectedAccessFields.join(','),
             description: description,
             lastModified: new Date().toISOString(),
