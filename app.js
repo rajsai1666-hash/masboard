@@ -9218,7 +9218,6 @@ function handleSaleOrderSubmission(e) {
                 clearOrderForm();
                 loadSaleOrders();
                 updateOrderStatistics();
-                updateDashboardStats();
             })
             .catch((error) => {
                 console.error('Error saving sale order:', error);
@@ -9338,7 +9337,6 @@ function updateSaleOrder(order) {
                         clearOrderForm();
                         loadSaleOrders(); // Reload to reflect changes
                         updateOrderStatistics();
-                        updateDashboardStats();
                         // Switch back to report section after update
                         setTimeout(() => {
                             showSection('sale-order-report');
@@ -9366,7 +9364,6 @@ function updateSaleOrder(order) {
             clearOrderForm();
             displaySaleOrders(saleOrders);
             updateOrderStatistics();
-            updateDashboardStats();
             // Switch back to report section after update
             setTimeout(() => {
                 showSection('sale-order-report');
