@@ -5046,9 +5046,11 @@ function updateSalesLocationChart() {
             const location = order.location || 'Unknown';
             // Sum all item values in the order
             const items = order.items || [];
+            console.log(`Processing order for location ${location} with items:`, items);
             const orderTotal = items.reduce((sum, item) => {
-                return sum + (parseFloat(item.value) || 0);
+                return sum + (parseFloat(item.rate) || 0);
             }, 0);
+            console.log(`Order for location ${location}: ₦${orderTotal.toLocaleString()}`);
             locationSales[location] = (locationSales[location] || 0) + orderTotal;
         });
 
@@ -9216,6 +9218,7 @@ function handleSaleOrderSubmission(e) {
                 clearOrderForm();
                 loadSaleOrders();
                 updateOrderStatistics();
+                updateDashboardStats();
             })
             .catch((error) => {
                 console.error('Error saving sale order:', error);
@@ -9335,6 +9338,7 @@ function updateSaleOrder(order) {
                         clearOrderForm();
                         loadSaleOrders(); // Reload to reflect changes
                         updateOrderStatistics();
+                        updateDashboardStats();
                         // Switch back to report section after update
                         setTimeout(() => {
                             showSection('sale-order-report');
@@ -9362,6 +9366,7 @@ function updateSaleOrder(order) {
             clearOrderForm();
             displaySaleOrders(saleOrders);
             updateOrderStatistics();
+            updateDashboardStats();
             // Switch back to report section after update
             setTimeout(() => {
                 showSection('sale-order-report');
