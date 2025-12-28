@@ -16,11 +16,11 @@
     <!-- content="default-src 'self'; script-src 'self' 'unsafe-hashes' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: https: https://www.darlingafrica.com https://upload.wikimedia.org https://avatars.githubusercontent.com; font-src 'self' https://cdnjs.cloudflare.com; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"> -->
     <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-hashes' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.gstatic.com https://www.gstatic.com/firebasejs/ https://market-activation-default-rtdb.firebaseio.com https://s-gke-usc1-nssi1-18.firebaseio.com;
+    script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.gstatic.com https://*.firebaseio.com;
     style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
     img-src 'self' data: https: https://www.darlingafrica.com https://upload.wikimedia.org https://avatars.githubusercontent.com;
     font-src 'self' https://cdnjs.cloudflare.com;
-    frame-src https://s-gke-usc1-nssi1-18.firebaseio.com;
+    frame-src https://*.firebaseio.com;
     object-src 'none';
     base-uri 'self';
     form-action 'self';
@@ -32,7 +32,8 @@
       https://*.firebaseio.com
       https://firestore.googleapis.com
       wss://*.firebaseio.com
-      https://market-activation-default-rtdb.firebaseio.com;
+      https://market-activation-default-rtdb.firebaseio.com
+      https://darling-braiding-activation-default-rtdb.firebaseio.com;
     upgrade-insecure-requests;">
 
     <meta http-equiv="X-Content-Type-Options" content="nosniff">
@@ -42,7 +43,6 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="security.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* iOS Safari and Mobile Compatibility Fixes */
         html,
@@ -92,6 +92,12 @@
 
             /* Hide Stylists section statistics cards on mobile */
             #stylists .row.g-3.mb-4 {
+                display: none !important;
+            }
+
+            /* Hide Sale Order Form cards on mobile */
+            #sale-order-form .row.g-3.mb-4,
+            #sale-order-form .dashboard-stats-row {
                 display: none !important;
             }
         }
@@ -930,6 +936,7 @@
         }
 
         @media (max-width: 430px) {
+
             #stylistReportTable,
             #stylistReportTable th,
             #stylistReportTable td {
@@ -939,6 +946,7 @@
                 min-width: unset !important;
                 word-break: break-word !important;
             }
+
             #stylistReportTable th,
             #stylistReportTable td {
                 text-align: center !important;
@@ -1242,11 +1250,18 @@
                             <i class="fas fa-user-plus"></i> Register Stylist
                         </a>
                     </li>
+
                     <li class="nav-item">
                         <a class="nav-link" href="#braiding-form">
                             <i class="fas fa-cut"></i> Braiding Form
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#sale-order-form">
+                            <i class="fas fa-shopping-cart"></i> Sale Order Form
+                        </a>
+                    </li>
+
                     <li class="nav-item">
                         <a class="nav-link" href="#stylists">
                             <i class="fas fa-users"></i> Stylists
@@ -1260,6 +1275,12 @@
                     <li class="nav-item">
                         <a class="nav-link" href="#customers">
                             <i class="fas fa-user-friends"></i> Token Counts
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="#sale-order-report">
+                            <i class="fas fa-chart-bar"></i> Sale Order Report
                         </a>
                     </li>
 
@@ -1379,11 +1400,11 @@
                         <div class="col-lg-6">
                             <div class="card">
                                 <div class="card-header">
-                                    <i class="fas fa-chart-pie me-2"></i> Token Distribution by Location
+                                    <i class="fas fa-chart-pie me-2"></i> Stylists by Location
                                 </div>
                                 <div class="card-body">
                                     <canvas id="locationChart" height="312"
-                                        style="display: block; box-sizing: border-box; height: 250px; width: 575.4px;"
+                                        style="display: block; box-sizing: border-box; height: 250px; width: 100%;"
                                         width="719"></canvas>
                                 </div>
                             </div>
@@ -1391,11 +1412,22 @@
                         <div class="col-lg-6">
                             <div class="card">
                                 <div class="card-header">
-                                    <i class="fas fa-chart-line me-2"></i> Daily Token Progress
+                                    <i class="fas fa-chart-pie me-2"></i> Sales by Location
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="salesLocationChart" height="312"
+                                        style="display: block; box-sizing: border-box; height: 250px; width: 100%;"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <i class="fas fa-chart-line me-2"></i> Daily Progress (7 Days)
                                 </div>
                                 <div class="card-body">
                                     <canvas id="dailyChart" height="312" width="719"
-                                        style="display: block; box-sizing: border-box; height: 250px; width: 575.4px;"></canvas>
+                                        style="display: block; box-sizing: border-box; height: 250px; width: 100%;"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -1868,6 +1900,7 @@
 
                 <!-- Stylist Report Section -->
                 <div id="stylist-report" class="dashboard-section" style="display: none;">
+
                     <h2 class="section-title">Daily Braiding Count Report</h2>
 
                     <div class="card">
@@ -1937,10 +1970,14 @@
                                     </tbody>
                                     <tfoot class="table-info">
                                         <tr>
-                                            <th class="text-center text-wrap align-content-center fw-900" style="min-width:55px;">TOTAL STYLISTS</th>
-                                            <th class="text-end align-content-center fw-900" id="stylistCountsf" style="text-align-last: center;"></th>
-                                            <th class="text-center text-wrap align-content-center fw-900" style="min-width:120px;">TOTAL TOKEN COUNTS</th>
-                                            <th class="text-end align-content-center fw-900" id="toknCountsf" style="text-align-last: center;"></th>
+                                            <th class="text-center text-wrap align-content-center fw-900"
+                                                style="min-width:55px;">TOTAL STYLISTS</th>
+                                            <th class="text-end align-content-center fw-900" id="stylistCountsf"
+                                                style="text-align-last: center;"></th>
+                                            <th class="text-center text-wrap align-content-center fw-900"
+                                                style="min-width:120px;">TOTAL TOKEN COUNTS</th>
+                                            <th class="text-end align-content-center fw-900" id="toknCountsf"
+                                                style="text-align-last: center;"></th>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -2198,6 +2235,229 @@
                                 </table>
                             </div>
                             <div id="paymentPagination" class="d-flex justify-content-center mt-3"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sale Order Form Section -->
+                <div id="sale-order-form" class="dashboard-section" style="display: none;">
+                    <h2 class="section-title">Sale Order Form</h2>
+                    <p class="text-muted mb-4">Create new sale orders for products and services</p>
+
+                    <!-- Order Form -->
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-plus-circle me-2"></i>Create New Sale Order
+                        </div>
+                        <div class="card-body">
+                            <form id="saleOrderForm" autocomplete="off">
+                                <!-- Main Order Details Section -->
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="orderDate" class="form-label">Order Date *</label>
+                                            <input type="date" class="form-control" name="orderDate" id="orderDate"
+                                                required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="saleOrderLocation" class="form-label">Location *</label>
+                                            <select class="form-select" name="location" id="saleOrderLocation" required>
+                                                <option value="">Select Location</option>
+                                                <option value="AKURE">AKURE</option>
+                                                <option value="IBADAN">IBADAN</option>
+                                                <option value="IBADAN-MOKOLA">IBADAN-MOKOLA</option>
+                                                <option value="ADO-EKITI">ADO-EKITI</option>
+                                                <option value="ILORIN">ILORIN</option>
+                                                <option value="OSOGBO">OSOGBO</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr class="my-4">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mb-0">Item Details</h5>
+                                </div>
+
+                                <!-- Item Details Table -->
+                                <div class="table-responsive">
+                                    <table class="table table-bordered" id="itemsTable">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Item Name *</th>
+                                                <th>Category</th>
+                                                <th>Quantity *</th>
+                                                <th>Distributor</th>
+                                                <th>Value (₦)</th>
+                                                <th>Rate (₦)</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="itemsTableBody">
+                                            <tr class="item-row" data-row="1">
+                                                <td>
+                                                    <input type="text" class="form-control item-name" name="itemName[]"
+                                                        required list="itemNameList"
+                                                        placeholder="Select or enter item name">
+                                                    <datalist id="itemNameList">
+                                                        <!-- Will be populated from database -->
+                                                    </datalist>
+                                                </td>
+                                                <td>
+                                                    <input type="text" class="form-control item-category"
+                                                        name="itemCategory[]" readonly placeholder="Auto-filled"
+                                                        style="background-color: #f8f9fa;">
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control item-quantity"
+                                                        name="quantity[]" required min="1" step="1" value="1"
+                                                        placeholder="1">
+                                                </td>
+                                                <td>
+                                                    <input type="text" class="form-control item-distributor"
+                                                        name="distributor[]" placeholder="Enter distributor"
+                                                        list="distributorList">
+                                                    <datalist id="distributorList">
+                                                        <!-- Will be populated dynamically -->
+                                                    </datalist>
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control item-rate" name="rate[]"
+                                                        step="1" placeholder="Enter rate">
+                                                </td>
+                                                <td>
+                                                    <input type="number" class="form-control item-value" name="value[]"
+                                                        readonly step="1" placeholder="Enter value">
+                                                </td>
+                                                <td>
+                                                    <button type="button"
+                                                        class="btn btn-sm btn-outline-danger remove-item-btn" disabled>
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                        <tfoot>>
+                                            <tr>
+                                                <th colspan="5" class="text-end">Total Order Value (₦):</th>
+                                                <th colspan="2">
+                                                    <input type="text" class="form-control" id="totalOrderValue"
+                                                        name="totalOrderValue" readonly
+                                                        style="background-color: #e9ecef; font-weight: bold;">
+                                                </th>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+
+                                <input type="hidden" name="orderTimestamp" id="orderTimestamp">
+                                <input type="hidden" name="orderId" id="orderId">
+
+                                <div class="d-flex gap-2 flex-wrap mt-4">
+                                    <button type="submit" class="btn btn-primary" id="createOrderBtn">
+                                        <i class="fas fa-save"></i> Create Order
+                                    </button>
+                                    <button type="reset" class="btn btn-outline-secondary" id="clearOrderBtn">
+                                        <i class="fas fa-eraser"></i> Clear Form
+                                    </button>
+                                    <!-- <button type="button" class="btn btn-info" id="calculateBtn">
+                                        <i class="fas fa-calculator"></i> Calculate Value
+                                    </button> -->
+                                    <button type="button" class="btn btn-sm btn-success" id="addNewItemRowBtn">
+                                        <i class="fas fa-plus"></i> Add New Item
+                                    </button>
+                                </div>
+                            </form>
+
+                            <div id="orderResult" class="mt-3" style="display: none;">
+                                <div class="alert" role="alert"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sale Order Report Section -->
+                <div id="sale-order-report" class="dashboard-section" style="display: none;">
+                    <h2 class="section-title">Sale Order Reports</h2>
+                    <p class="text-muted mb-4">View and analyze sale order data and performance</p>
+
+                    <!-- Orders Table -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center d-none">
+                                <div><i class="fas fa-list me-2"></i>Sale Orders</div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-outline-primary btn-sm" id="refreshOrdersBtn">
+                                        <i class="fas fa-refresh"></i> Refresh
+                                    </button>
+                                    <button class="btn btn-success btn-sm" id="exportOrdersBtn">
+                                        <i class="fas fa-download"></i> Export
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- Search and Filter -->
+                            <div class="mt-3">
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <input type="text" class="form-control" id="orderSearch"
+                                            placeholder="Search orders...">
+                                    </div>
+                                    <div class="col-md-2 d-none">
+                                        <select class="form-select" id="orderStatusFilter">
+                                            <option value="">All Status</option>
+                                            <option value="pending">Pending</option>
+                                            <option value="processing">Processing</option>
+                                            <option value="completed">Completed</option>
+                                            <option value="cancelled">Cancelled</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2 d-none">
+                                        <select class="form-select" id="paymentMethodFilter">
+                                            <option value="">All Payment</option>
+                                            <option value="cash">Cash</option>
+                                            <option value="bank_transfer">Bank Transfer</option>
+                                            <option value="pos">POS</option>
+                                            <option value="mobile_money">Mobile Money</option>
+                                            <option value="credit">Credit</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="date" class="form-control" id="orderFromDate" title="From date">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="date" class="form-control" id="orderToDate" title="To date">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button class="btn btn-outline-secondary w-100" id="clearOrderFiltersBtn">
+                                            <i class="fas fa-times"></i> Clear
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="ordersTable">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Item Name</th>
+                                            <th>Category</th>
+                                            <th>Quantity</th>
+                                            <th>Rate (₦)</th>
+                                            <th>Value (₦)</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ordersTableBody">
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">Loading orders...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2525,6 +2785,20 @@
                                                 </div>
                                                 <div class="form-check">
                                                     <input class="form-check-input" type="checkbox"
+                                                        value="sale-order-form" id="access_sale_order_form"
+                                                        name="accessFields">
+                                                    <label class="form-check-label" for="access_sale_order_form">Sale
+                                                        Order Form</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox"
+                                                        value="sale-order-report" id="access_sale_order_report"
+                                                        name="accessFields">
+                                                    <label class="form-check-label" for="access_sale_order_report">Sale
+                                                        Order Report</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox"
                                                         value="stylist-report" id="access_stylist_report"
                                                         name="accessFields">
                                                     <label class="form-check-label" for="access_stylist_report">Stylist
@@ -2702,7 +2976,63 @@
                                 </div>
                             </div>
                         </div>
+
                         <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <i class="fas fa-box me-2"></i> Product/Item Management
+                                    <button class="btn btn-sm btn-primary float-end" id="addNewItemBtn">
+                                        <i class="fas fa-plus"></i> Add New Item
+                                    </button>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Add New Item Form -->
+                                    <div id="addItemForm" style="display: none;">
+                                        <form id="newItemForm">
+                                            <div class="mb-3">
+                                                <label for="settingsItemName" class="form-label">Item Name *</label>
+                                                <input type="text" class="form-control" id="settingsItemName" required
+                                                    list="settingsItemNameList"
+                                                    placeholder="Enter new or select existing item">
+                                                <datalist id="settingsItemNameList">
+                                                    <!-- Will be populated from existing items -->
+                                                </datalist>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="settingsItemCategory" class="form-label">Category</label>
+                                                <input type="text" class="form-control" id="settingsItemCategory"
+                                                    list="settingsCategoryList"
+                                                    placeholder="Enter new or select existing category">
+                                                <datalist id="settingsCategoryList">
+                                                    <!-- Will be populated from existing categories -->
+                                                </datalist>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="settingsItemDescription"
+                                                    class="form-label">Description</label>
+                                                <textarea class="form-control" id="settingsItemDescription" rows="2"
+                                                    placeholder="Enter item description"></textarea>
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <button type="button" class="btn btn-primary" id="saveNewItemBtn">
+                                                    <i class="fas fa-save"></i> Save Item
+                                                </button>
+                                                <button type="button" class="btn btn-danger" id="deleteItemBtn"
+                                                    style="display: none;">
+                                                    <i class="fas fa-trash"></i> Delete Item
+                                                </button>
+                                                <button type="button" class="btn btn-secondary" id="cancelAddItemBtn">
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </form>
+                                        <hr>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 d-none">
                             <div class="card">
                                 <div class="card-header">
                                     <i class="fas fa-database me-2"></i> Data Management
@@ -2790,7 +3120,11 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
     <script src="app.js"></script>
 
 
@@ -2952,4 +3286,3 @@
 </body>
 
 </html>
-
