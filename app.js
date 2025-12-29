@@ -5274,10 +5274,10 @@ function updateLocationSummaryTable(locationCounts) {
                             <td><strong>Total</strong></td>
                             <td><strong>${totalStylists}</strong></td>
                             <td><strong>${totalBraiding}</strong></td>
-                            <td><strong>₦${totalSalesSum.toLocaleString()}</strong></td>
                             <td><strong>₦${totalPaymentSum.toLocaleString()}</strong></td>
                             <td><strong>₦${totalPaymentDoneSum.toLocaleString()}</strong></td>
                             <td><strong>₦${totalPaymentPendingSum.toLocaleString()}</strong></td>
+                            <td><strong>₦${totalSalesSum.toLocaleString()}</strong></td>
                         `;
             }
 
@@ -10678,4 +10678,5 @@ document.addEventListener('click', function (e) {
         }
     }
 });
+
 
