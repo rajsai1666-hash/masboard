@@ -1376,10 +1376,10 @@
                                             <th>Location</th>
                                             <th>Stylists Registered</th>
                                             <th>Braiding Completed</th>
-                                            <th>No. of Days</th>
                                             <th>Total Payment</th>
                                             <th>Payment Done</th>
                                             <th>Payment Pending</th>
+                                            <th>Total Sales</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -2283,6 +2283,49 @@
 
                                 <!-- Item Details Table -->
                                 <div class="table-responsive">
+                                    <style>
+                                        .item-name,
+                                        .edit-item-name {
+                                            min-width: 200px !important;
+                                            width: 100% !important;
+                                        }
+
+                                        #itemsTable th:nth-child(1),
+                                        #itemsTable td:nth-child(1) {
+                                            min-width: 220px;
+                                            width: 25%;
+                                        }
+
+                                        #itemsTable th:nth-child(2),
+                                        #itemsTable td:nth-child(2) {
+                                            width: 15%;
+                                        }
+
+                                        #itemsTable th:nth-child(3),
+                                        #itemsTable td:nth-child(3) {
+                                            width: 10%;
+                                        }
+
+                                        #itemsTable th:nth-child(4),
+                                        #itemsTable td:nth-child(4) {
+                                            width: 15%;
+                                        }
+
+                                        #itemsTable th:nth-child(5),
+                                        #itemsTable td:nth-child(5) {
+                                            width: 12.5%;
+                                        }
+
+                                        #itemsTable th:nth-child(6),
+                                        #itemsTable td:nth-child(6) {
+                                            width: 12.5%;
+                                        }
+
+                                        #itemsTable th:nth-child(7),
+                                        #itemsTable td:nth-child(7) {
+                                            width: 10%;
+                                        }
+                                    </style>
                                     <table class="table table-bordered" id="itemsTable">
                                         <thead class="table-light">
                                             <tr>
@@ -2297,13 +2340,11 @@
                                         </thead>
                                         <tbody id="itemsTableBody">
                                             <tr class="item-row" data-row="1">
-                                                <td>
-                                                    <input type="text" class="form-control item-name" name="itemName[]"
-                                                        required list="itemNameList"
-                                                        placeholder="Select or enter item name">
-                                                    <datalist id="itemNameList">
-                                                        <!-- Will be populated from database -->
-                                                    </datalist>
+                                                <td style="min-width: 220px;">
+                                                    <select class="form-control item-name" name="itemName[]" required
+                                                        style="min-width: 200px; font-size: 13px;">
+                                                        <option value="">Select item name</option>
+                                                    </select>
                                                 </td>
                                                 <td>
                                                     <input type="text" class="form-control item-category"
@@ -2440,22 +2481,37 @@
                         <div class="card-body">
                             <div class="table-responsive">
                                 <table class="table table-hover" id="ordersTable">
+                                    <thead class="table-info">
+                                        <tr>
+                                            <th colspan="8" class="text-center fw-900">Total Order Value</th>
+                                            <th class="text-end fw-900" id="totalOrdersValueTop"
+                                                style="text-align-last: center;">₦0</th>
+                                        </tr>
+                                    </thead>
                                     <thead class="table-dark">
                                         <tr>
                                             <th>Date</th>
+                                            <th>Distributor</th>
+                                            <th>Location</th>
                                             <th>Item Name</th>
                                             <th>Category</th>
                                             <th>Quantity</th>
-                                            <th>Value (₦)</th>
                                             <th>Rate (₦)</th>
+                                            <th>Value (₦)</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="ordersTableBody">
                                         <tr>
-                                            <td colspan="7" class="text-center text-muted">Loading orders...</td>
+                                            <td colspan="9" class="text-center text-muted">Loading orders...</td>
                                         </tr>
                                     </tbody>
+                                    <tfoot class="table-info">
+                                        <tr>
+                                            <th colspan="8" class="text-end fw-900">TOTAL ORDER VALUE</th>
+                                            <th class="text-end fw-900" id="totalOrdersValue"
+                                                style="text-align-last: center;">₦0</th>
+                                        </tr>
                                 </table>
                             </div>
                         </div>
