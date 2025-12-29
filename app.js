@@ -2243,6 +2243,7 @@ function processStylistsData(stylistsList, tbody) {
             if (balanceSpan) balanceSpan.textContent = toBePaidAmount.toFixed(2);
             if (totalSpan) totalSpan.textContent = totalAmount.toFixed(2);
         });
+        attachStylistActionListeners()
     }).catch(error => {
         console.error('Error fetching customer data:', error);
         // Render table without customer data
@@ -2291,6 +2292,7 @@ function processStylistsData(stylistsList, tbody) {
             </tr>`;
         }).join('');
         applyAdminOnlyVisibility();
+        attachStylistActionListeners();
     });
 
     // Update dropdowns and other UI as needed
@@ -3195,22 +3197,23 @@ function attachTokenActionListeners() {
 
 // Edit stylist function
 function editStylist(stylistKey) {
+    // console.log("Edit stylist called for key:", stylistKey);
     if (!currentUser) {
         showAlert('Please login to perform this action', 'danger');
         return;
     }
-
+    console.log("Current user:", currentUser);
     const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin' || currentUser.isMaster || currentUser.role.includes('master') || currentUser.role.includes('admin');
     if (!isAdmin) {
         showAlert('Only admins can edit stylists', 'danger');
         return;
     }
-
+    // console.log("User is admin, proceeding to edit stylist");
     if (!firebaseAvailable) {
         showAlert('Firebase connection required', 'danger');
         return;
     }
-
+    // console.log("Fetching stylist data for key:", stylistKey);
     database.ref('stylists/' + stylistKey).once('value', (snapshot) => {
         const stylist = snapshot.val();
         if (!stylist) {
@@ -3226,6 +3229,7 @@ function editStylist(stylistKey) {
 
 // Show edit stylist modal
 function showEditStylistModal(stylistKey, stylist) {
+    console.log("Editing stylist:", stylistKey, stylist);
     const safeStylestId = escapeHtml(stylistKey);
     const safeStylistName = escapeHtml(stylist.stylistName || '');
     const safePhoneNumber = escapeHtml(stylist.phoneNumber || '');
@@ -3266,7 +3270,7 @@ function showEditStylistModal(stylistKey, stylist) {
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Stylist Code *</label>
-                                    <input type="text" class="form-control" id="editStylistCode" value="${safeStylistCode}" required>
+                                    <input type="text" class="form-control" id="editStylistCode" readonly value="${safeStylistCode}" required>
                                     <div class="invalid-feedback">Stylist code is required.</div>
                                 </div>
                                 <div class="col-md-6">
@@ -5046,11 +5050,11 @@ function updateSalesLocationChart() {
             const location = order.location || 'Unknown';
             // Sum all item values in the order
             const items = order.items || [];
-            console.log(`Processing order for location ${location} with items:`, items);
+            // console.log(`Processing order for location ${location} with items:`, items);
             const orderTotal = items.reduce((sum, item) => {
                 return sum + (parseFloat(item.rate) || 0);
             }, 0);
-            console.log(`Order for location ${location}: ₦${orderTotal.toLocaleString()}`);
+            // console.log(`Order for location ${location}: ₦${orderTotal.toLocaleString()}`);
             locationSales[location] = (locationSales[location] || 0) + orderTotal;
         });
 
@@ -5148,14 +5152,17 @@ function updateLocationSummaryTable(locationCounts) {
     if (firebaseAvailable) {
         Promise.all([
             database.ref('customers').once('value'),
-            database.ref('stylists').once('value')
-        ]).then(([customersSnapshot, stylistsSnapshot]) => {
+            database.ref('stylists').once('value'),
+            database.ref('saleOrders').once('value')
+        ]).then(([customersSnapshot, stylistsSnapshot, saleOrdersSnapshot]) => {
             // console.log('Firebase data loaded for location summary');
 
             const customers = customersSnapshot.val() || {};
             const stylists = stylistsSnapshot.val() || {};
+            const saleOrders = saleOrdersSnapshot.val() || {};
             const customersArray = Object.values(customers);
             const stylistsArray = Object.values(stylists);
+            const saleOrdersArray = Object.values(saleOrders);
 
             // console.log('Customers count:', customersArray);
             // console.log('Stylists count:', stylistsArray.length);
@@ -5180,6 +5187,7 @@ function updateLocationSummaryTable(locationCounts) {
             // Process each location with real data
             let totalStylists = 0;
             let totalBraiding = 0;
+            let totalSalesSum = 0;
             let totalPaymentSum = 0;
             let totalPaymentDoneSum = 0;
             let totalPaymentPendingSum = 0;
@@ -5204,29 +5212,18 @@ function updateLocationSummaryTable(locationCounts) {
                 // Calculate actual braiding completed (customer count for this location)
                 const braidingCompleted = locationCustomers.length;
 
-                // Calculate days since first stylist registration in this location
-                let days = 0;
-                if (locationStylists.length > 0) {
-                    // const registrationDates = locationStylists
-                    //     .map(stylist => new Date(stylist.registrationDate || stylist.timestamp))
-                    //     .filter(date => !isNaN(date));
-                    const registrationDates = locationCustomers
-                        .map(customer => new Date(customer.registrationDate || customer.timestamp))
-                        .filter(date => !isNaN(date));
-                    // console.log(`Location ${location}: Registration dates:`, registrationDates);
+                // Calculate total sales for this location from sale orders
+                let totalSales = 0;
+                const locationSaleOrders = saleOrdersArray.filter(order =>
+                    order.location === location
+                );
 
-                    if (registrationDates.length > 0) {
-                        // Count unique dates (ignoring time)
-                        const uniqueDays = new Set(
-                            registrationDates.map(date => {
-                                const d = new Date(date);
-                                d.setHours(0, 0, 0, 0);
-                                return d.getTime();
-                            })
-                        );
-                        days = uniqueDays.size;
-                    }
-                }
+                locationSaleOrders.forEach(order => {
+                    order['items'].forEach(item => {
+                        // console.log(`Adding item to total sales for location ${location}:`, item.rate);
+                        totalSales += parseFloat(item.rate) || 0;
+                    });
+                });
 
                 // Calculate actual payments for this location
                 let totalPayment = 0;
@@ -5251,15 +5248,16 @@ function updateLocationSummaryTable(locationCounts) {
                             <td>${location}</td>
                             <td>${stylistCount}</td>
                             <td>${braidingCompleted}</td>
-                            <td>${days}</td>
                             <td>₦${totalPayment.toLocaleString()}</td>
                             <td>₦${paymentDone.toLocaleString()}</td>
                             <td>₦${paymentPending.toLocaleString()}</td>
+                            <td>₦${totalSales.toLocaleString()}</td>
                         `;
 
                 // Add to totals
                 totalStylists += stylistCount;
                 totalBraiding += braidingCompleted;
+                totalSalesSum += totalSales;
                 totalPaymentSum += totalPayment;
                 totalPaymentDoneSum += paymentDone;
                 totalPaymentPendingSum += paymentPending;
@@ -5276,7 +5274,7 @@ function updateLocationSummaryTable(locationCounts) {
                             <td><strong>Total</strong></td>
                             <td><strong>${totalStylists}</strong></td>
                             <td><strong>${totalBraiding}</strong></td>
-                            <td><strong>-</strong></td>
+                            <td><strong>₦${totalSalesSum.toLocaleString()}</strong></td>
                             <td><strong>₦${totalPaymentSum.toLocaleString()}</strong></td>
                             <td><strong>₦${totalPaymentDoneSum.toLocaleString()}</strong></td>
                             <td><strong>₦${totalPaymentPendingSum.toLocaleString()}</strong></td>
@@ -5726,6 +5724,10 @@ function loadSectionData(sectionId) {
                 loadSaleOrders();
                 dataCache.saleOrders = { loaded: true, timestamp: now };
             }
+            // Always refresh datalists when entering form
+            updateItemNameDatalist();
+            updateDistributorDatalist();
+            populateLocationDropdowns();
             break;
         case 'dashboard':
             updateDashboardStats();
@@ -8697,33 +8699,42 @@ function loadTokenNumbers() {
 function loadOrderItems() {
     if (typeof database !== 'undefined' && database) {
         database.ref('orderItems').once('value', (snapshot) => {
-            const itemNameList = document.getElementById('itemNameList');
-            if (itemNameList) {
-                itemNameList.innerHTML = '';
-                orderItems = [];
+            // Update all item name dropdowns in the form
+            const itemDropdowns = document.querySelectorAll('.item-name');
+            itemDropdowns.forEach(dropdown => {
+                const currentValue = dropdown.value;
+                dropdown.innerHTML = '<option value="">Select item name</option>';
 
                 if (snapshot.exists()) {
                     snapshot.forEach((childSnapshot) => {
                         const item = childSnapshot.val();
-                        item.orderId = childSnapshot.key; // Store Firebase key for deletion
-                        orderItems.push(item);
-
                         const option = document.createElement('option');
                         option.value = item.itemName;
-                        option.textContent = `${item.itemName} - ₦${item.rate || 0}`;
-                        itemNameList.appendChild(option);
+                        option.textContent = `${item.itemName}`;
+                        option.setAttribute('data-category', item.category || '');
+                        option.setAttribute('data-rate', item.rate || 0);
+                        dropdown.appendChild(option);
                     });
-                    // console.log('Order items loaded from Firebase');
-                    updateSettingsDataLists(); // Update settings datalists
                 }
+
+                // Restore previous value if it exists
+                if (currentValue) dropdown.value = currentValue;
+            });
+
+            orderItems = [];
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    const item = childSnapshot.val();
+                    item.orderId = childSnapshot.key;
+                    orderItems.push(item);
+                });
+                updateSettingsDataLists();
             }
         }).catch((error) => {
             console.error('Error loading order items:', error);
-            // Fallback to localStorage
             loadOrderItemsFromLocalStorage();
         });
     } else {
-        // Fallback to localStorage
         loadOrderItemsFromLocalStorage();
     }
 }
@@ -8813,16 +8824,23 @@ function populateLocationDropdowns() {
 
 // Update item name datalist
 function updateItemNameDatalist() {
-    const itemNameList = document.getElementById('itemNameList');
-    if (itemNameList) {
-        itemNameList.innerHTML = '';
+    const itemDropdowns = document.querySelectorAll('.item-name');
+    itemDropdowns.forEach(dropdown => {
+        const currentValue = dropdown.value;
+        dropdown.innerHTML = '<option value="">Select item name</option>';
+
         orderItems.forEach(item => {
             const option = document.createElement('option');
             option.value = item.itemName;
-            option.textContent = `${item.itemName} - ₦${item.rate || 0}`;
-            itemNameList.appendChild(option);
+            option.textContent = `${item.itemName}`;
+            option.setAttribute('data-category', item.category || '');
+            option.setAttribute('data-rate', item.rate || 0);
+            dropdown.appendChild(option);
         });
-    }
+
+        // Restore previous value if it exists
+        if (currentValue) dropdown.value = currentValue;
+    });
 }
 
 // Handle stylist code change - auto-fill location for all rows
@@ -8949,9 +8967,11 @@ function addNewItemRow() {
     newRow.setAttribute('data-row', rowCount);
 
     newRow.innerHTML = `
-        <td>
-            <input type="text" class="form-control item-name" name="itemName[]" required 
-                   list="itemNameList" placeholder="Select or enter item name">
+        <td style="min-width: 220px;">
+            <select class="form-control item-name" name="itemName[]" required 
+                    style="min-width: 200px; font-size: 13px;">
+                <option value="">Select item name</option>
+            </select>
         </td>
         <td>
             <input type="text" class="form-control item-category" name="itemCategory[]" readonly
@@ -8980,6 +9000,20 @@ function addNewItemRow() {
     `;
 
     tbody.appendChild(newRow);
+
+    // Populate the new dropdown with items
+    const newDropdown = newRow.querySelector('.item-name');
+    if (newDropdown) {
+        orderItems.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.itemName;
+            option.textContent = `${item.itemName}`;
+            option.setAttribute('data-category', item.category || '');
+            option.setAttribute('data-rate', item.rate || 0);
+            newDropdown.appendChild(option);
+        });
+    }
+
     setupItemRowListeners();
     updateRemoveButtonsState();
 }
@@ -9229,13 +9263,14 @@ function handleSaleOrderSubmission(e) {
 
 // Clear order form
 function clearOrderForm() {
+    console.log('Clearing order form...');
     const form = document.getElementById('saleOrderForm');
     if (form) {
         const isEditMode = form.hasAttribute('data-edit-order-id');
 
         // Reset form to create mode first
         const submitBtn = form.querySelector('button[type="submit"]');
-        if (submitBtn && isEditMode) {
+        if (submitBtn) {
             submitBtn.innerHTML = '<i class="fas fa-save"></i> Create Order';
             submitBtn.classList.remove('btn-warning');
             submitBtn.classList.add('btn-primary');
@@ -9243,7 +9278,7 @@ function clearOrderForm() {
 
         // Reset clear button to normal mode
         const clearBtn = form.querySelector('#clearOrderBtn');
-        if (clearBtn && isEditMode) {
+        if (clearBtn) {
             clearBtn.innerHTML = '<i class="fas fa-eraser"></i> Clear Form';
             clearBtn.classList.remove('btn-outline-danger');
             clearBtn.classList.add('btn-outline-secondary');
@@ -9252,18 +9287,12 @@ function clearOrderForm() {
         // Remove edit mode attributes
         form.removeAttribute('data-edit-order-id');
 
-        // If we were in edit mode, go back to report section
-        if (isEditMode) {
-            showSection('sale-order-report');
-            return; // Don't clear form fields when canceling edit
-        }
-
         // Reset main form fields
         document.getElementById('saleOrderLocation').value = '';
         document.getElementById('totalOrderValue').value = '';
         setDefaultOrderDate();
 
-        // Clear all item rows except the first one totalOrderValue
+        // Clear all item rows except the first one
         const tbody = document.getElementById('itemsTableBody');
         const rows = tbody.querySelectorAll('.item-row');
 
@@ -9281,9 +9310,26 @@ function clearOrderForm() {
             firstRow.querySelector('.item-distributor').value = '';
             firstRow.querySelector('.item-rate').value = '';
             firstRow.querySelector('.item-value').value = '';
+        } else {
+            // If no rows exist, add one empty row
+            addNewItemRow();
         }
 
+        // Force refresh datalists after clearing
+        setTimeout(() => {
+            updateItemNameDatalist();
+            updateDistributorDatalist();
+            setupItemRowListeners();
+        }, 100);
+
         updateRemoveButtonsState();
+
+        // If we were in edit mode, show success message
+        if (isEditMode) {
+            showOrderMessage('Edit cancelled and form cleared', 'info');
+        } else {
+            showOrderMessage('Form cleared', 'info');
+        }
     }
 }
 
@@ -9413,45 +9459,44 @@ function displaySaleOrders(orders) {
     if (!tbody) return;
 
     if (orders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No orders found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No orders found</td></tr>';
         return;
     }
 
+    let totalRate = 0;
     tbody.innerHTML = orders.map(order => {
         if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-            // ${ idx === 0 ? `<td rowspan="${order.items.length}">${formatDateForDisplay(order.orderDate)}</td>` : '' }
-            // ${
-            //     idx === 0 ? `<td rowspan="${order.items.length}" class="text-center btn-group">
-            //             <button class="btn btn-icon btn-outline-success" title="Edit" data-action="edit-order" data-order-id="${order.orderId}"><i class="fas fa-edit"></i></button>
-            //             <button class="btn btn-icon btn-outline-danger" title="Delete" data-action="delete-order" data-order-id="${order.orderId}"><i class="fas fa-trash"></i></button>
-            //         </td>` : ''
-            // }
-            // console.log('Displaying order with items:', order);
-            // console.log('Displaying order with items:', order.orderId);
-            return order.items.map((item, idx) => `
+            return order.items.map((item, idx) => {
+                totalRate += Number(item.rate) || 0;
+                return `
                 <tr>
                     <td>${formatDateForDisplay(order.orderDate)}</td>
+                    <td>${item.distributor}</td>
+                    <td>${order.location}</td>
                     <td>${item.itemName}</td>
                     <td>${item.itemCategory || '-'}</td>
                     <td class="text-start">${item.quantity || 0}</td>
-                    <td class="text-start">₦${(item.rate || 0).toFixed(2)}</td>
-                    <td class="text-start"><strong>₦${(item.value || 0).toFixed(2)}</strong></td>
+                    <td class="text-start">₦${(item.value || 0).toFixed(2)}</td>
+                    <td class="text-start"><strong>₦${(item.rate || 0).toFixed(2)}</strong></td>
                     <td class="text-center btn-group">
                         <button class="btn btn-icon btn-outline-success" title="Edit" data-action="edit-order" data-order-id="${order.orderId}"><i class="fas fa-edit"></i></button>
                         <button class="btn btn-icon btn-outline-danger" title="Delete" data-action="delete-order" data-order-id="${order.orderId}"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
         } else {
-            // fallback for old orders with no items array
+            totalRate += Number(order.rate) || 0;
             return `
                 <tr>
                     <td>${formatDateForDisplay(order.orderDate)}</td>
+                    <td>${order.distributor || '-'}</td>
+                    <td>${order.location || '-'}</td>
                     <td>${order.itemName || '-'}</td>
                     <td>${order.itemCategory || '-'}</td>
                     <td class="text-center">${order.quantity || 0}</td>
-                    <td class="text-end">₦${(order.rate || 0).toFixed(2)}</td>
-                    <td class="text-end"><strong>₦${(order.value || 0).toFixed(2)}</strong></td>
+                    <td class="text-end">₦${(order.value || 0).toFixed(2)}</td>
+                    <td class="text-end"><strong>₦${(order.rate || 0).toFixed(2)}</strong></td>
                     <td class="text-center btn-group">
                         <button class="btn btn-icon btn-outline-success" title="Edit" data-action="edit-order" data-order-id="${order.orderId}"><i class="fas fa-edit"></i></button>
                         <button class="btn btn-icon btn-outline-danger" title="Delete" data-action="delete-order" data-order-id="${order.orderId}"><i class="fas fa-trash"></i></button>
@@ -9460,6 +9505,10 @@ function displaySaleOrders(orders) {
             `;
         }
     }).join('');
+
+    // Summary row removed as per user request
+    document.getElementById('totalOrdersValue').textContent = '₦ ' + totalRate.toFixed(2);
+    document.getElementById('totalOrdersValueTop').textContent = '₦ ' + totalRate.toFixed(2);
 }
 
 // Update order statistics
@@ -9654,101 +9703,577 @@ Remarks: ${order.remarks || 'None'}
 }
 
 function editSaleOrder(orderId) {
-    // console.log('Editing sale order with ID:', orderId);
-    // console.log('Current sale orders:', saleOrders);
     const order = saleOrders.find(o => o.orderId === orderId);
     if (!order) {
         alert('Order not found!');
         return;
     }
 
-    // Switch to sale order form section
-    showSection('sale-order-form');
+    // Show edit modal popup
+    showEditSaleOrderModal(orderId, order);
+}
 
-    // Populate simplified main form fields - only location and date
-    document.getElementById('orderDate').value = order.orderDate || '';
-    document.getElementById('saleOrderLocation').value = order.location || '';
-
-    // Clear existing item rows
-    const tbody = document.getElementById('itemsTableBody');
-    tbody.innerHTML = '';
-    console.log('Populating item rows for order:', order);
-    // Populate items table
+// Show edit sale order modal
+function showEditSaleOrderModal(orderId, order) {
+    // Generate items table rows for the modal
+    let itemsTableHTML = '';
     if (order.items && Array.isArray(order.items)) {
         order.items.forEach((item, index) => {
-            const newRow = document.createElement('tr');
-            newRow.className = 'item-row';
-            newRow.setAttribute('data-row', index + 1);
-
-            newRow.innerHTML = `
-                <td>
-                    <input type="text" class="form-control item-name" name="itemName[]" required 
-                           list="itemNameList" placeholder="Select or enter item name" value="${item.itemName || ''}">
+            itemsTableHTML += `
+                <tr class="edit-item-row" data-row="${index + 1}">
+                    <td style="min-width: 220px;">
+                        <select class="form-control edit-item-name" required 
+                                style="min-width: 200px; font-size: 13px;">
+                            <option value="">Select item name</option>
+                            <!-- Will be populated with items -->
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control edit-item-category" readonly
+                               value="${item.itemCategory || ''}" style="background-color: #f8f9fa;">
+                    </td>
+                    <td>
+                        <input type="number" class="form-control edit-item-quantity" 
+                               min="1" step="1" value="${item.quantity || 1}">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control edit-item-distributor" 
+                               list="editDistributorList" value="${item.distributor || ''}">
+                    </td>
+                    <td>
+                        <input type="number" class="form-control edit-item-rate" 
+                               step="1" value="${item.rate || 0}" style="background-color: #f8f9fa;">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control edit-item-value" readonly
+                               value="${item.value || 0}">
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-outline-danger edit-remove-item-btn">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+    } else {
+        // Add one empty row
+        itemsTableHTML = `
+            <tr class="edit-item-row" data-row="1">
+                <td style="min-width: 220px;">
+                    <select class="form-control edit-item-name" required 
+                            style="min-width: 200px; font-size: 13px;">
+                        <option value="">Select item name</option>
+                    </select>
                 </td>
                 <td>
-                    <input type="text" class="form-control item-category" name="itemCategory[]" readonly
-                           placeholder="Auto-filled" style="background-color: #f8f9fa;" value="${item.itemCategory || ''}">
+                    <input type="text" class="form-control edit-item-category" readonly
+                           style="background-color: #f8f9fa;">
                 </td>
                 <td>
-                    <input type="number" class="form-control item-quantity" name="quantity[]" required
-                           min="1" step="1" placeholder="1" value="${item.quantity || 1}">
+                    <input type="number" class="form-control edit-item-quantity" 
+                           min="1" step="1" value="1">
                 </td>
                 <td>
-                    <input type="text" class="form-control item-distributor" name="distributor[]"
-                    list="distributorList" placeholder="Enter distributor" value="${item.distributor || ''}">
+                    <input type="text" class="form-control edit-item-distributor" 
+                           list="editDistributorList">
                 </td>
                 <td>
-                    <input type="number" class="form-control item-rate" name="rate[]"
-                           step="1" placeholder="Auto-filled" style="background-color: #f8f9fa;" value="${item.rate || 0}">
+                    <input type="number" class="form-control edit-item-rate" 
+                           step="1" value="0" style="background-color: #f8f9fa;">
                 </td>
                 <td>
-                    <input type="text" class="form-control item-value" name="value[]" readonly step="1"
-                           placeholder="Enter value" value="${item.value || 0}">
+                    <input type="text" class="form-control edit-item-value" readonly value="0">
                 </td>
                 <td>
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn">
+                    <button type="button" class="btn btn-sm btn-outline-danger edit-remove-item-btn">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
-            `;
+            </tr>
+        `;
+    }
 
-            tbody.appendChild(newRow);
+    // Generate item name datalist
+    let itemNameOptions = '';
+    orderItems.forEach(item => {
+        itemNameOptions += `<option value="${item.itemName}">${item.itemName}</option>`;
+    });
+
+    // Generate distributor datalist
+    let distributorOptions = '';
+    distributorNames.forEach(name => {
+        distributorOptions += `<option value="${name}"></option>`;
+    });
+
+    // Generate location options from database
+    let locationOptions = '<option value="">Select Location</option>';
+
+    // Function to generate modal after getting locations
+    const generateModalWithLocations = (availableLocations) => {
+        availableLocations.forEach(loc => {
+            locationOptions += `<option value="${loc}" ${order.location === loc ? 'selected' : ''}>${loc}</option>`;
         });
-        calculateTotalOrderValue();
+
+        const modalHTML = `
+        <div class="modal fade" id="editSaleOrderModal" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Sale Order - ${orderId}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editSaleOrderForm" novalidate>
+                            <input type="hidden" id="editOrderId" value="${orderId}">
+                            
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-4">
+                                    <label class="form-label">Order Date</label>
+                                    <input type="date" class="form-control" id="editOrderDate" 
+                                           value="${order.orderDate || ''}" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Location</label>
+                                    <select class="form-select" id="editOrderLocation" required>
+                                        ${locationOptions}
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Total Order Value</label>
+                                    <input type="number" class="form-control" id="editTotalOrderValue" 
+                                           value="${order.totalValue || 0}" readonly style="background-color: #f8f9fa;">
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6>Order Items</h6>
+                                    <button type="button" class="btn btn-sm btn-primary" id="editAddItemBtn">
+                                        <i class="fas fa-plus me-1"></i>Add Item
+                                    </button>
+                                </div>
+                                
+                                <div class="table-responsive">
+                                    <table class="table table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>Item Name</th>
+                                                <th>Category</th>
+                                                <th>Quantity</th>
+                                                <th>Distributor</th>
+                                                <th>Value</th>
+                                                <th>Rate</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="editItemsTableBody">
+                                            ${itemsTableHTML}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <style>
+                                .edit-item-name {
+                                    min-width: 200px !important;
+                                    font-size: 13px !important;
+                                }
+                                .edit-item-row td:first-child {
+                                    min-width: 220px !important;
+                                }
+                            </style>
+
+                            <!-- Only keep distributor datalist -->
+                            <datalist id="editDistributorList">
+                                ${distributorOptions}
+                            </datalist>
+
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="saveEditedSaleOrder()">
+                            <i class="fas fa-save me-2"></i>Update Order
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+        // Remove existing modal if any
+        const existingModal = document.getElementById('editSaleOrderModal');
+        if (existingModal) existingModal.remove();
+
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Setup event listeners for the modal
+        setupEditSaleOrderModalListeners();
+
+        // Populate all dropdowns in the modal
+        populateEditModalDropdowns(order);
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('editSaleOrderModal'));
+        modal.show();
+    };
+
+    // Fetch locations from database (stylists table)
+    if (typeof database !== 'undefined' && database) {
+        database.ref('stylists').once('value', (snapshot) => {
+            const locations = new Set();
+
+            if (snapshot.exists()) {
+                snapshot.forEach((childSnapshot) => {
+                    const stylist = childSnapshot.val();
+                    if (stylist.location) {
+                        locations.add(stylist.location);
+                    }
+                });
+            }
+
+            // Sort locations alphabetically and generate modal
+            const sortedLocations = Array.from(locations).sort();
+            generateModalWithLocations(sortedLocations);
+        }).catch((error) => {
+            console.error('Error loading locations:', error);
+            // Fallback: use default locations
+            const defaultLocations = ['AKURE', 'IBADAN', 'LAGOS', 'ABUJA', 'PORT HARCOURT', 'KANO'];
+            generateModalWithLocations(defaultLocations);
+        });
     } else {
-        // Add one empty row if no items
-        addNewItemRow();
+        // Fallback: use default locations
+        const defaultLocations = ['AKURE', 'IBADAN', 'LAGOS', 'ABUJA', 'PORT HARCOURT', 'KANO'];
+        generateModalWithLocations(defaultLocations);
+    }
+}
+
+// Populate edit modal dropdowns with item data
+function populateEditModalDropdowns(order) {
+    const modal = document.getElementById('editSaleOrderModal');
+    if (!modal) return;
+
+    const itemDropdowns = modal.querySelectorAll('.edit-item-name');
+
+    itemDropdowns.forEach((dropdown, index) => {
+        // Clear existing options
+        dropdown.innerHTML = '<option value="">Select item name</option>';
+
+        // Populate with order items
+        orderItems.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.itemName;
+            option.textContent = `${item.itemName}`;
+            option.setAttribute('data-category', item.category || '');
+            option.setAttribute('data-rate', item.rate || 0);
+            dropdown.appendChild(option);
+        });
+
+        // Set selected value if order has items
+        if (order.items && order.items[index]) {
+            const existingItem = order.items[index];
+            console.log('Editing item:', existingItem); // Debug log
+            dropdown.value = existingItem.itemName || '';
+
+            // Auto-populate fields immediately (without event)
+            const row = dropdown.closest('.edit-item-row');
+            if (row) {
+                const categoryInput = row.querySelector('.edit-item-category');
+                const rateInput = row.querySelector('.edit-item-rate');
+                const quantityInput = row.querySelector('.edit-item-quantity');
+                const distributorInput = row.querySelector('.edit-item-distributor');
+                const valueInput = row.querySelector('.edit-item-value');
+
+                // Set values from existing item data
+                if (categoryInput) {
+                    categoryInput.value = existingItem.itemCategory || existingItem.category || '';
+                    console.log('Category set to:', categoryInput.value);
+                }
+                if (rateInput) {
+                    rateInput.value = existingItem.rate || 0;
+                    console.log('Rate set to:', rateInput.value);
+                }
+                if (quantityInput) quantityInput.value = existingItem.quantity || 1;
+                if (distributorInput) distributorInput.value = existingItem.distributor || '';
+                if (valueInput) {
+                    valueInput.value = existingItem.value || 0;
+                    console.log('Value set to:', valueInput.value);
+                }
+            }
+        }
+    });
+
+    // Calculate total after populating all fields
+    setTimeout(() => {
+        calculateEditTotalValue();
+    }, 100);
+}
+
+// Setup event listeners for edit sale order modal
+function setupEditSaleOrderModalListeners() {
+    const modal = document.getElementById('editSaleOrderModal');
+
+    // Add item button
+    const addItemBtn = modal.querySelector('#editAddItemBtn');
+    if (addItemBtn) {
+        addItemBtn.addEventListener('click', addEditItemRow);
     }
 
-    // Setup event listeners for new rows
-    setupItemRowListeners();
-    updateRemoveButtonsState();
+    // Item name change listeners
+    modal.addEventListener('change', function (e) {
+        if (e.target.classList.contains('edit-item-name')) {
+            handleEditItemNameChange(e.target);
+        }
+    });
 
-    // Change form to edit mode
-    const form = document.getElementById('saleOrderForm');
-    const submitBtn = form.querySelector('button[type="submit"]');
-    if (submitBtn) {
-        submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Update Order';
-        submitBtn.classList.remove('btn-primary');
-        submitBtn.classList.add('btn-warning');
+    // Quantity and rate change listeners
+    modal.addEventListener('input', function (e) {
+        if (e.target.classList.contains('edit-item-quantity') ||
+            e.target.classList.contains('edit-item-rate')) {
+            calculateEditItemValue(e.target);
+        }
+    });
+
+    // Remove item button listeners
+    modal.addEventListener('click', function (e) {
+        if (e.target.closest('.edit-remove-item-btn')) {
+            removeEditItemRow(e.target.closest('.edit-remove-item-btn'));
+        }
+    });
+
+    // Distributor input uppercase
+    modal.addEventListener('input', function (e) {
+        if (e.target.classList.contains('edit-item-distributor')) {
+            e.target.value = e.target.value.toUpperCase();
+        }
+    });
+
+    // Update remove button states initially
+    updateEditRemoveButtonsState();
+}
+
+// Handle item name change in edit modal
+function handleEditItemNameChange(selectElement) {
+    const selectedOption = selectElement.selectedOptions[0];
+    if (!selectedOption || !selectedOption.value) return;
+
+    const itemName = selectedOption.value;
+    const category = selectedOption.getAttribute('data-category') || '';
+    const rate = selectedOption.getAttribute('data-rate') || 0;
+
+    const row = selectElement.closest('.edit-item-row');
+    const categoryInput = row.querySelector('.edit-item-category');
+    const rateInput = row.querySelector('.edit-item-rate');
+
+    // Auto-fill category and rate
+    if (categoryInput) categoryInput.value = category;
+    if (rateInput) rateInput.value = rate;
+
+    calculateEditItemValue(selectElement);
+}
+
+// Calculate item value in edit modal
+function calculateEditItemValue(input) {
+    const row = input.closest('.edit-item-row');
+    const quantityInput = row.querySelector('.edit-item-quantity');
+    const rateInput = row.querySelector('.edit-item-rate');
+    const valueInput = row.querySelector('.edit-item-value');
+
+    const quantity = parseFloat(quantityInput.value) || 0;
+    const rate = parseFloat(rateInput.value) || 0;
+    const value = rate / quantity;
+
+    valueInput.value = value.toFixed(2);
+    calculateEditTotalValue();
+}
+
+// Calculate total order value in edit modal
+function calculateEditTotalValue() {
+    const modal = document.getElementById('editSaleOrderModal');
+    const valueInputs = modal.querySelectorAll('.edit-item-value');
+    let total = 0;
+
+    valueInputs.forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+
+    const totalInput = modal.querySelector('#editTotalOrderValue');
+    if (totalInput) {
+        totalInput.value = total.toFixed(2);
+    }
+}
+
+// Add new item row in edit modal
+function addEditItemRow() {
+    const tbody = document.getElementById('editItemsTableBody');
+    const rowCount = tbody.querySelectorAll('.edit-item-row').length + 1;
+
+    const newRow = document.createElement('tr');
+    newRow.className = 'edit-item-row';
+    newRow.setAttribute('data-row', rowCount);
+
+    newRow.innerHTML = `
+        <td style="min-width: 220px;">
+            <select class="form-control edit-item-name" required 
+                    style="min-width: 200px; font-size: 13px;">
+                <option value="">Select item name</option>
+            </select>
+        </td>
+        <td>
+            <input type="text" class="form-control edit-item-category" readonly
+                   style="background-color: #f8f9fa;">
+        </td>
+        <td>
+            <input type="number" class="form-control edit-item-quantity" 
+                   min="1" step="1" value="1">
+        </td>
+        <td>
+            <input type="text" class="form-control edit-item-distributor" 
+                   list="editDistributorList">
+        </td>
+        <td>
+            <input type="number" class="form-control edit-item-rate" 
+                   step="1" value="0" style="background-color: #f8f9fa;" readonly>
+        </td>
+        <td>
+            <input type="text" class="form-control edit-item-value" readonly value="0">
+        </td>
+        <td>
+            <button type="button" class="btn btn-sm btn-outline-danger edit-remove-item-btn">
+                <i class="fas fa-trash"></i>
+            </button>
+        </td>
+    `;
+
+    tbody.appendChild(newRow);
+
+    // Populate the new dropdown with items
+    const newDropdown = newRow.querySelector('.edit-item-name');
+    if (newDropdown) {
+        orderItems.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.itemName;
+            option.textContent = `${item.itemName}`;
+            option.setAttribute('data-category', item.category || '');
+            option.setAttribute('data-rate', item.rate || 0);
+            newDropdown.appendChild(option);
+        });
     }
 
-    // Add cancel button in edit mode
-    const clearBtn = form.querySelector('#clearOrderBtn');
-    if (clearBtn) {
-        clearBtn.innerHTML = '<i class="fas fa-times me-2"></i>Cancel Edit';
-        clearBtn.classList.remove('btn-outline-secondary');
-        clearBtn.classList.add('btn-outline-danger');
+    updateEditRemoveButtonsState();
+}
+
+// Remove item row in edit modal
+function removeEditItemRow(btn) {
+    const row = btn.closest('.edit-item-row');
+    const tbody = document.getElementById('editItemsTableBody');
+
+    if (tbody.querySelectorAll('.edit-item-row').length > 1) {
+        row.remove();
+        calculateEditTotalValue();
+        updateEditRemoveButtonsState();
+    }
+}
+
+// Update remove button states in edit modal
+function updateEditRemoveButtonsState() {
+    const tbody = document.getElementById('editItemsTableBody');
+    if (!tbody) return;
+
+    const rows = tbody.querySelectorAll('.edit-item-row');
+    const removeButtons = tbody.querySelectorAll('.edit-remove-item-btn');
+
+    removeButtons.forEach(btn => {
+        btn.disabled = rows.length <= 1;
+        btn.style.opacity = rows.length <= 1 ? '0.5' : '1';
+    });
+}
+
+// Save edited sale order
+function saveEditedSaleOrder() {
+    const modal = document.getElementById('editSaleOrderModal');
+    const orderId = modal.querySelector('#editOrderId').value;
+    const orderDate = modal.querySelector('#editOrderDate').value;
+    const location = modal.querySelector('#editOrderLocation').value;
+    const totalValue = modal.querySelector('#editTotalOrderValue').value;
+
+    // Validate required fields
+    if (!orderDate || !location) {
+        alert('Please fill in all required fields.');
+        return;
     }
 
-    // Store the order ID being edited
-    form.setAttribute('data-edit-order-id', orderId);
+    // Collect items data
+    const items = [];
+    const itemRows = modal.querySelectorAll('.edit-item-row');
 
-    // Show success message
-    showOrderMessage(`Editing order ${orderId}. Make changes and click "Update Order" to save.`, 'info');
+    itemRows.forEach(row => {
+        const itemNameSelect = row.querySelector('.edit-item-name');
+        const itemName = itemNameSelect ? itemNameSelect.value.trim() : '';
+        const itemCategory = row.querySelector('.edit-item-category').value.trim();
+        const quantity = row.querySelector('.edit-item-quantity').value;
+        const distributor = row.querySelector('.edit-item-distributor').value.trim();
+        const rate = row.querySelector('.edit-item-rate').value;
+        const value = row.querySelector('.edit-item-value').value;
 
-    // Scroll to top of form
-    document.getElementById('sale-order-form').scrollIntoView({ behavior: 'smooth' });
+        if (itemName) {
+            items.push({
+                itemName,
+                itemCategory,
+                quantity: parseInt(quantity) || 1,
+                distributor,
+                rate: parseFloat(rate) || 0,
+                value: parseFloat(value) || 0
+            });
+        }
+    });
+
+    if (items.length === 0) {
+        alert('Please add at least one item.');
+        return;
+    }
+
+    // Create updated order object
+    const updatedOrder = {
+        orderId,
+        orderDate,
+        location,
+        totalValue: parseFloat(totalValue) || 0,
+        items,
+        timestamp: new Date().toISOString()
+    };
+
+    // Update in saleOrders array
+    const orderIndex = saleOrders.findIndex(o => o.orderId === orderId);
+    if (orderIndex !== -1) {
+        saleOrders[orderIndex] = updatedOrder;
+
+        // Save to Firebase/localStorage
+        if (typeof database !== 'undefined' && database) {
+            database.ref('saleOrders/' + orderId).set(updatedOrder)
+                .then(() => {
+                    showOrderMessage('Order updated successfully!', 'success');
+                    loadSaleOrders(); // Refresh the table
+                })
+                .catch(error => {
+                    console.error('Error updating order:', error);
+                    showOrderMessage('Error updating order: ' + error.message, 'danger');
+                });
+        } else {
+            // Save to localStorage
+            localStorage.setItem('firebase_saleOrders', JSON.stringify(saleOrders));
+            showOrderMessage('Order updated successfully!', 'success');
+            loadSaleOrders(); // Refresh the table
+        }
+
+        // Close modal
+        const modalInstance = bootstrap.Modal.getInstance(modal);
+        modalInstance.hide();
+
+    } else {
+        alert('Order not found!');
+    }
 }
 
 function deleteSaleOrder(orderId) {
