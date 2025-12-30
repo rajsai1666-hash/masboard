@@ -8534,6 +8534,19 @@ function setupSaleOrderEventListeners() {
     const saleOrderForm = document.getElementById('saleOrderForm');
     if (saleOrderForm) {
         saleOrderForm.addEventListener('submit', handleSaleOrderSubmission);
+
+        // Add event listener to clear field errors when user interacts with fields
+        saleOrderForm.addEventListener('input', function (e) {
+            if (e.target.classList.contains('is-invalid')) {
+                clearFieldError(e.target);
+            }
+        });
+
+        saleOrderForm.addEventListener('change', function (e) {
+            if (e.target.classList.contains('is-invalid')) {
+                clearFieldError(e.target);
+            }
+        });
     }
 
     // Auto-fill functionality is no longer needed for simplified form
@@ -9151,56 +9164,146 @@ function setDefaultOrderDate() {
     }
 }
 
+// Helper function to show inline error message near a field
+function showFieldError(element, message) {
+    // Remove any existing error message for this field
+    clearFieldError(element);
+
+    // Add error class to the field
+    element.classList.add('is-invalid');
+
+    // Create error message element
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'invalid-feedback d-block';
+    errorDiv.style.color = '#dc3545';
+    errorDiv.style.fontSize = '0.875rem';
+    errorDiv.style.marginTop = '0.25rem';
+    errorDiv.textContent = message;
+    errorDiv.setAttribute('data-error-for', element.id || element.name || 'field');
+
+    // Insert error message after the field
+    if (element.parentElement) {
+        element.parentElement.appendChild(errorDiv);
+    }
+}
+
+// Helper function to clear inline error message from a field
+function clearFieldError(element) {
+    element.classList.remove('is-invalid');
+
+    // Remove error message if exists
+    if (element.parentElement) {
+        const errorMessages = element.parentElement.querySelectorAll('.invalid-feedback');
+        errorMessages.forEach(msg => msg.remove());
+    }
+}
+
+// Helper function to clear all field errors in a form or container
+function clearAllFieldErrors(container) {
+    const invalidFields = container.querySelectorAll('.is-invalid');
+    invalidFields.forEach(field => clearFieldError(field));
+
+    const errorMessages = container.querySelectorAll('.invalid-feedback');
+    errorMessages.forEach(msg => msg.remove());
+}
+
 // Handle sale order form submission
 function handleSaleOrderSubmission(e) {
     e.preventDefault();
 
+    // Clear all previous field errors
+    const form = document.getElementById('saleOrderForm');
+    clearAllFieldErrors(form);
+
     // Get main order details
-    const orderDate = document.getElementById('orderDate').value;
-    const location = document.getElementById('saleOrderLocation').value;
+    const orderDateInput = document.getElementById('orderDate');
+    const locationSelect = document.getElementById('saleOrderLocation');
+    const orderDate = orderDateInput.value;
+    const location = locationSelect.value;
 
     // Check if we're editing an existing order
-    const form = document.getElementById('saleOrderForm');
     const editOrderId = form.getAttribute('data-edit-order-id');
     const isEditMode = !!editOrderId;
+
+    // Validate main order details first
+    let hasError = false;
+    if (!orderDate) {
+        showFieldError(orderDateInput, 'Order Date is required!');
+        hasError = true;
+    }
+    if (!location) {
+        showFieldError(locationSelect, 'Location is required!');
+        hasError = true;
+    }
+
+    if (hasError) {
+        showOrderMessage('Please fill all required fields!', 'danger');
+        return;
+    }
 
     // Get all item details from table
     const itemRows = document.querySelectorAll('.item-row');
     const items = [];
     let isValid = true;
 
-    itemRows.forEach((row, index) => {
-        const itemName = row.querySelector('.item-name').value;
-        const itemCategory = row.querySelector('.item-category').value;
-        const quantity = parseFloat(row.querySelector('.item-quantity').value);
-        const distributor = row.querySelector('.item-distributor').value;
-        const rate = parseFloat(row.querySelector('.item-rate').value);
-
-        if (!itemName || !quantity || isNaN(rate)) {
-            showOrderMessage(`Please fill all required fields in row ${index + 1}!`, 'danger');
-            isValid = false;
-            return;
-        }
-
-        const value = rate / quantity;
-
-        items.push({
-            itemName: itemName,
-            itemCategory: itemCategory,
-            quantity: quantity,
-            distributor: distributor,
-            rate: rate,
-            value: value
-        });
-    });
-
-    // Validation
-    if (!orderDate || !location) {
-        showOrderMessage('Please fill all required fields!', 'danger');
+    if (itemRows.length === 0) {
+        showOrderMessage('Please add at least one item to the order!', 'danger');
         return;
     }
 
-    if (!isValid || items.length === 0) {
+    itemRows.forEach((row, index) => {
+        const itemNameSelect = row.querySelector('.item-name');
+        const itemCategoryInput = row.querySelector('.item-category');
+        const quantityInput = row.querySelector('.item-quantity');
+        const distributorInput = row.querySelector('.item-distributor');
+        const rateInput = row.querySelector('.item-rate');
+
+        const itemName = itemNameSelect.value.trim();
+        const itemCategory = itemCategoryInput.value.trim();
+        const quantity = quantityInput.value.trim();
+        const distributor = distributorInput.value.trim();
+        const rate = rateInput.value.trim();
+
+        // Check for blank fields with inline error messages
+        if (!itemName) {
+            showFieldError(itemNameSelect, `Item Name is required!`);
+            isValid = false;
+        }
+        if (!quantity || isNaN(parseFloat(quantity)) || parseFloat(quantity) <= 0) {
+            showFieldError(quantityInput, `Valid positive quantity required!`);
+            isValid = false;
+        }
+        if (!distributor) {
+            showFieldError(distributorInput, `Distributor is required!`);
+            isValid = false;
+        }
+        if (!rate || isNaN(parseFloat(rate)) || parseFloat(rate) < 1) {
+            showFieldError(rateInput, `Valid rate required!`);
+            isValid = false;
+        }
+
+        if (isValid || itemName) {
+            const value = parseFloat(rate) / parseFloat(quantity);
+
+            items.push({
+                itemName: itemName,
+                itemCategory: itemCategory,
+                quantity: parseFloat(quantity),
+                distributor: distributor,
+                rate: parseFloat(rate),
+                value: value
+            });
+        }
+    });
+
+    // Check if validation passed
+    if (!isValid) {
+        showOrderMessage('Please fix all validation errors in the form!', 'danger');
+        return;
+    }
+
+    if (items.length === 0) {
+        showOrderMessage('Please add at least one valid item to the order!', 'danger');
         return;
     }
 
@@ -9965,7 +10068,7 @@ function populateEditModalDropdowns(order) {
             const option = document.createElement('option');
             option.value = item.itemName;
             option.textContent = `${item.itemName}`;
-            option.setAttribute('data-category', item.category || '');
+            option.setAttribute('data-category', item.itemCategory || '');
             option.setAttribute('data-rate', item.rate || 0);
             dropdown.appendChild(option);
         });
@@ -10025,6 +10128,11 @@ function setupEditSaleOrderModalListeners() {
         if (e.target.classList.contains('edit-item-name')) {
             handleEditItemNameChange(e.target);
         }
+
+        // Clear field error when user changes value
+        if (e.target.classList.contains('is-invalid')) {
+            clearFieldError(e.target);
+        }
     });
 
     // Quantity and rate change listeners
@@ -10032,6 +10140,11 @@ function setupEditSaleOrderModalListeners() {
         if (e.target.classList.contains('edit-item-quantity') ||
             e.target.classList.contains('edit-item-rate')) {
             calculateEditItemValue(e.target);
+        }
+
+        // Clear field error when user types
+        if (e.target.classList.contains('is-invalid')) {
+            clearFieldError(e.target);
         }
     });
 
@@ -10193,14 +10306,37 @@ function updateEditRemoveButtonsState() {
 // Save edited sale order
 function saveEditedSaleOrder() {
     const modal = document.getElementById('editSaleOrderModal');
-    const orderId = modal.querySelector('#editOrderId').value;
-    const orderDate = modal.querySelector('#editOrderDate').value;
-    const location = modal.querySelector('#editOrderLocation').value;
-    const totalValue = modal.querySelector('#editTotalOrderValue').value;
 
-    // Validate required fields
-    if (!orderDate || !location) {
-        alert('Please fill in all required fields.');
+    // Clear all previous field errors
+    clearAllFieldErrors(modal);
+
+    const orderIdInput = modal.querySelector('#editOrderId');
+    const orderDateInput = modal.querySelector('#editOrderDate');
+    const locationSelect = modal.querySelector('#editOrderLocation');
+    const totalValueInput = modal.querySelector('#editTotalOrderValue');
+
+    const orderId = orderIdInput.value;
+    const orderDate = orderDateInput.value;
+    const location = locationSelect.value;
+    const totalValue = totalValueInput.value;
+
+    // Validate main order details first
+    let hasError = false;
+    if (!orderId) {
+        showOrderMessage('Order ID is missing!', 'danger');
+        return;
+    }
+    if (!orderDate) {
+        showFieldError(orderDateInput, 'Order Date is required!');
+        hasError = true;
+    }
+    if (!location) {
+        showFieldError(locationSelect, 'Location is required!');
+        hasError = true;
+    }
+
+    if (hasError) {
+        showOrderMessage('Please fill all required fields!', 'danger');
         return;
     }
 
@@ -10208,14 +10344,44 @@ function saveEditedSaleOrder() {
     const items = [];
     const itemRows = modal.querySelectorAll('.edit-item-row');
 
-    itemRows.forEach(row => {
+    if (itemRows.length === 0) {
+        showOrderMessage('Please add at least one item to the order!', 'danger');
+        return;
+    }
+
+    let isValid = true;
+    itemRows.forEach((row, index) => {
         const itemNameSelect = row.querySelector('.edit-item-name');
+        const itemCategoryInput = row.querySelector('.edit-item-category');
+        const quantityInput = row.querySelector('.edit-item-quantity');
+        const distributorInput = row.querySelector('.edit-item-distributor');
+        const rateInput = row.querySelector('.edit-item-rate');
+        const valueInput = row.querySelector('.edit-item-value');
+
         const itemName = itemNameSelect ? itemNameSelect.value.trim() : '';
-        const itemCategory = row.querySelector('.edit-item-category').value.trim();
-        const quantity = row.querySelector('.edit-item-quantity').value;
-        const distributor = row.querySelector('.edit-item-distributor').value.trim();
-        const rate = row.querySelector('.edit-item-rate').value;
-        const value = row.querySelector('.edit-item-value').value;
+        const itemCategory = itemCategoryInput.value.trim();
+        const quantity = quantityInput.value.trim();
+        const distributor = distributorInput.value.trim();
+        const rate = rateInput.value.trim();
+        const value = valueInput.value.trim();
+
+        // Check for blank required fields with inline error messages
+        if (!itemName) {
+            showFieldError(itemNameSelect, `Item Name is required!`);
+            isValid = false;
+        }
+        if (!quantity || isNaN(parseFloat(quantity)) || parseFloat(quantity) <= 0) {
+            showFieldError(quantityInput, `Valid positive quantity required!`);
+            isValid = false;
+        }
+        if (!distributor) {
+            showFieldError(distributorInput, `Distributor is required!`);
+            isValid = false;
+        }
+        if (!rate || isNaN(parseFloat(rate)) || parseFloat(rate) < 1) {
+            showFieldError(rateInput, `Valid rate required!`);
+            isValid = false;
+        }
 
         if (itemName) {
             items.push({
@@ -10229,8 +10395,13 @@ function saveEditedSaleOrder() {
         }
     });
 
+    if (!isValid) {
+        showOrderMessage('Please fix all validation errors in the form!', 'danger');
+        return;
+    }
+
     if (items.length === 0) {
-        alert('Please add at least one item.');
+        showOrderMessage('Please add at least one valid item!', 'danger');
         return;
     }
 
@@ -10267,9 +10438,19 @@ function saveEditedSaleOrder() {
             loadSaleOrders(); // Refresh the table
         }
 
-        // Close modal
-        const modalInstance = bootstrap.Modal.getInstance(modal);
-        modalInstance.hide();
+        // Remove focus from any focused element inside modal to prevent aria-hidden warning
+        const activeElement = document.activeElement;
+        if (activeElement && modal.contains(activeElement)) {
+            activeElement.blur();
+        }
+
+        // Close modal after a short delay to allow blur to complete
+        setTimeout(() => {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        }, 100);
 
     } else {
         alert('Order not found!');
@@ -10678,5 +10859,4 @@ document.addEventListener('click', function (e) {
         }
     }
 });
-
 
