@@ -12926,12 +12926,12 @@ function renderCarouselMedia(mediaList) {
             `}
             <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); 
                         padding: 10px 20px; border-radius: 8px; color: white; max-width: 80%;">
-                <h6 class="mb-1"><i class="fas fa-${currentMedia.type === 'image' ? 'image' : 'video'} me-2"></i>${currentMedia.name}</h6>
                 <p class="mb-0 small"><i class="fas fa-map-marker-alt me-2"></i>${currentMedia.location} | <i class="fas fa-calendar me-2"></i>${currentMedia.date}</p>
             </div>
         </div>
     `;
 
+     //<h6 class="mb-1"><i class="fas fa-${currentMedia.type === 'image' ? 'image' : 'video'} me-2"></i>${currentMedia.name}</h6>
     // Render thumbnails
     thumbnailsContainer.innerHTML = mediaList.map((media, index) => `
         <div style="cursor: pointer; opacity: ${index === currentCarouselIndex ? '1' : '0.4'}; 
@@ -13021,3 +13021,4 @@ document.addEventListener('DOMContentLoaded', function () {
         loadCarouselFilters();
     }, 1000);
 });
+
