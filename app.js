@@ -2939,6 +2939,10 @@ function showEditUserModal(userId, user) {
                                                         <input class="form-check-input" type="checkbox" value="settings" id="edit_access_settings" name="editAccessFields">
                                                         <label class="form-check-label" for="edit_access_settings">Settings</label>
                                                     </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="media-section" id="edit_access_media_section" name="editAccessFields">
+                                                        <label class="form-check-label" for="edit_access_media_section">Media Section</label>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div class="form-text">Select at least one access field.</div>
