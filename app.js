@@ -24,6 +24,7 @@ const firebaseConfig = {
 // Initialize Firebase using a single object parameter (recommended)
 var app = firebase.initializeApp({ ...firebaseConfig });
 const database = firebase.database(app);
+const storage = firebase.storage(app);
 // Firebase availability flag
 let firebaseAvailable = true;
 
@@ -258,8 +259,1343 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var refreshUsersBtn = document.getElementById('refreshUsersBtn');
     if (refreshUsersBtn) refreshUsersBtn.addEventListener('click', refreshUsers);
+
+    // Initialize media section if it exists
+    if (document.getElementById('locationFolderRow')) {
+        renderLocationFolders();
+    }
 });
 
+// Media Section functionality - Firebase Storage integration
+let locationMediaList = [];
+let currentLocationFiles = {};
+let currentDateFiles = {};
+
+// Upload functionality - opens the static modal from index.html
+function showUploadModal() {
+    const modalElement = document.getElementById('uploadMediaModal');
+    if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    } else {
+        console.error('Upload modal not found in HTML');
+    }
+}
+
+// Fetch locations from Firebase Storage
+async function fetchLocationsFromStorage() {
+    try {
+        const storageRef = storage.ref('media/');
+        const result = await storageRef.listAll();
+
+        locationMediaList = [];
+        const locationPromises = result.prefixes.map(async (locationRef) => {
+            const locationName = locationRef.name;
+            const dateResult = await locationRef.listAll();
+
+            let totalImages = 0, totalVideos = 0;
+
+            const datePromises = dateResult.prefixes.map(async (dateRef) => {
+                const filesResult = await dateRef.listAll();
+                filesResult.items.forEach(item => {
+                    const fileName = item.name.toLowerCase();
+                    if (fileName.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+                        totalImages++;
+                    } else if (fileName.match(/\.(mp4|mov|avi|webm)$/)) {
+                        totalVideos++;
+                    }
+                });
+            });
+
+            await Promise.all(datePromises);
+
+            return {
+                name: locationName,
+                subfolders: dateResult.prefixes.length,
+                images: totalImages,
+                videos: totalVideos
+            };
+        });
+
+        locationMediaList = await Promise.all(locationPromises);
+    } catch (error) {
+        console.error('Error fetching locations:', error);
+        locationMediaList = [];
+    }
+}
+
+async function renderLocationFolders() {
+    const row = document.getElementById('locationFolderRow');
+    if (!row) return;
+
+    // Show loading
+    row.innerHTML = '<div class="col-12 text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Loading locations...</div>';
+
+    // Fetch latest data from Firebase Storage
+    await fetchLocationsFromStorage();
+    // Update totals
+    const totalLocationsEl = document.getElementById('totalLocationsMedia');
+    const totalSubfoldersEl = document.getElementById('totalSubfoldersMedia');
+    const totalImagesEl = document.getElementById('totalImagesMedia');
+    const totalVideosEl = document.getElementById('totalVideosMedia');
+    row.innerHTML = '';
+    let totalSubfolders = 0, totalImages = 0, totalVideos = 0;
+
+    if (locationMediaList.length === 0) {
+        row.innerHTML = `
+            <div class="col-12 text-center p-4">
+                <i class="fas fa-folder-open fa-4x text-muted mb-3"></i>
+                <h5 class="text-muted">No locations found</h5>
+                <p class="text-muted">Upload some media files to get started</p>
+                <button class="btn btn-primary" onclick="showUploadModal()">
+                    <i class="fas fa-upload me-2"></i>Upload Files
+                </button>
+            </div>
+        `;
+        totalLocationsEl.textContent = 0;
+        totalSubfoldersEl.textContent = 0;
+        totalImagesEl.textContent = 0;
+        totalVideosEl.textContent = 0;
+        return;
+    }
+
+    locationMediaList.forEach(loc => {
+        totalSubfolders += loc.subfolders;
+        totalImages += loc.images;
+        totalVideos += loc.videos;
+
+        const col = document.createElement('div');
+        col.className = 'col-6 col-md-4 col-lg-3 mb-3';
+        col.innerHTML = `
+            <div class="card border-0 shadow-sm h-100 location-folder-card" 
+                 style="cursor:pointer; border-radius: 16px; overflow: hidden; transition: all 0.3s ease;"
+                 onclick="loadLocationMedia('${loc.name}')">
+                <div class="position-absolute top-0 end-0 m-2" style="z-index: 10;">
+                    <button class="btn btn-sm btn-danger rounded-circle" 
+                            onclick="event.stopPropagation(); deleteLocation('${loc.name}');" 
+                            title="Delete Location"
+                            style="width: 32px; height: 32px; padding: 0;">
+                        <i class="fas fa-trash fa-xs"></i>
+                    </button>
+                </div>
+                <div class="card-body text-center p-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <i class="fas fa-map-marker-alt fa-3x text-white mb-2" style="opacity: 0.9;"></i>
+                    <h6 class="text-white fw-bold mb-0">${loc.name}</h6>
+                </div>
+                <div class="card-footer bg-white border-0 p-2">
+                    <div class="d-flex flex-wrap justify-content-center gap-1 mb-1">
+                        <span class="badge bg-secondary bg-opacity-75" style="font-size: 0.65rem;">
+                            <i class="fas fa-folder fa-xs me-1"></i>${loc.subfolders}
+                        </span>
+                        <span class="badge bg-info bg-opacity-75" style="font-size: 0.65rem;">
+                            <i class="fas fa-image fa-xs me-1"></i>${loc.images}
+                        </span>
+                        ${loc.videos > 0 ? `<span class="badge bg-success bg-opacity-75" style="font-size: 0.65rem;"><i class="fas fa-video fa-xs me-1"></i>${loc.videos}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const card = col.querySelector('.location-folder-card');
+        card.addEventListener('mouseenter', function () {
+            this.style.transform = 'translateY(-6px)';
+            this.style.boxShadow = '0 12px 28px rgba(0,0,0,0.18)';
+        });
+        card.addEventListener('mouseleave', function () {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '';
+        });
+
+        row.appendChild(col);
+    });
+
+    if (totalLocationsEl) totalLocationsEl.textContent = locationMediaList.length;
+    if (totalSubfoldersEl) totalSubfoldersEl.textContent = totalSubfolders;
+    if (totalImagesEl) totalImagesEl.textContent = totalImages;
+    if (totalVideosEl) totalVideosEl.textContent = totalVideos;
+
+    // Initialize gallery with instruction
+    const mediaGallery = document.getElementById('mediaGallery');
+    if (mediaGallery) {
+        mediaGallery.innerHTML = `
+            <div class="text-center p-4 p-md-5">
+                <div class="mb-4">
+                    <i class="fas fa-hand-pointer fa-3x text-primary mb-3" style="opacity: 0.5;"></i>
+                    <h5 class="text-muted mb-2">Select a location to view media</h5>
+                    <p class="text-muted small mb-0">Click on any location folder above</p>
+                </div>
+            </div>
+        `;
+    }
+}
+
+async function loadLocationMedia(locationName) {
+    const mediaGallery = document.getElementById('mediaGallery');
+    if (!mediaGallery) return;
+
+    // Show loading
+    mediaGallery.innerHTML = `
+        <div class="text-center p-4">
+            <i class="fas fa-spinner fa-spin fa-2x"></i><br>
+            Loading ${locationName} folders...
+        </div>
+    `;
+
+    try {
+        const locationRef = storage.ref(`media/${locationName}/`);
+        const result = await locationRef.listAll();
+
+        currentLocationFiles = {};
+        const datePromises = result.prefixes.map(async (dateRef) => {
+            const dateName = dateRef.name;
+            const filesResult = await dateRef.listAll();
+
+            let images = 0, videos = 0;
+            filesResult.items.forEach(item => {
+                const fileName = item.name.toLowerCase();
+                if (fileName.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+                    images++;
+                } else if (fileName.match(/\.(mp4|mov|avi|webm)$/)) {
+                    videos++;
+                }
+            });
+
+            currentLocationFiles[dateName] = { images, videos, files: filesResult.items };
+        });
+
+        await Promise.all(datePromises);
+
+        let html = `
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
+                <div>
+                    <h5 class="mb-1"><i class='fas fa-folder text-warning me-2'></i>${locationName}</h5>
+                    <small class="text-muted">${Object.keys(currentLocationFiles).length} date folders</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="renderLocationFolders()">
+                        <i class="fas fa-arrow-left me-1"></i><span class="d-none d-md-inline">Back to Locations</span><span class="d-md-none">Back</span>
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="showUploadModal()">
+                        <i class="fas fa-upload me-1"></i><span class="d-none d-sm-inline">Upload</span>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        if (Object.keys(currentLocationFiles).length === 0) {
+            html += `
+                <div class="text-center p-4">
+                    <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                    <h6 class="text-muted">No date folders found</h6>
+                    <p class="text-muted">Upload some files to create date folders</p>
+                    <button class="btn btn-primary" onclick="showUploadModal()">
+                        <i class="fas fa-upload me-2"></i>Upload Files
+                    </button>
+                </div>
+            `;
+        } else {
+            html += '<div class="row g-2 g-md-3">';
+
+            Object.keys(currentLocationFiles).sort().reverse().forEach(dateStr => {
+                const dateData = currentLocationFiles[dateStr];
+                const totalFiles = dateData.images + dateData.videos;
+                html += `
+                    <div class='col-6 col-md-4 col-lg-3'>
+                        <div class="card border-0 shadow-sm h-100 date-folder-card" 
+                             style="cursor:pointer; transition: all 0.3s ease; border-radius: 12px;"
+                             onclick="loadDateMedia('${locationName}', '${dateStr}')">
+                            <div class="position-absolute top-0 end-0 m-2" style="z-index: 10;">
+                                <button class="btn btn-sm btn-danger rounded-circle" 
+                                        onclick="event.stopPropagation(); deleteFolder('${locationName}', '${dateStr}');" 
+                                        title="Delete Folder"
+                                        style="width: 32px; height: 32px; padding: 0;">
+                                    <i class="fas fa-trash fa-xs"></i>
+                                </button>
+                            </div>
+                            <div class="card-body text-center p-3">
+                                <div class="mb-3">
+                                    <i class="fas fa-folder fa-3x text-primary" style="opacity: 0.8;"></i>
+                                </div>
+                                <h6 class="fw-bold mb-2" style="font-size: 0.9rem;">${dateStr}</h6>
+                                <div class="d-flex justify-content-center gap-1 flex-wrap">
+                                    ${dateData.images > 0 ? `<span class="badge bg-info bg-opacity-75" style="font-size: 0.7rem;">${dateData.images} <i class="fas fa-image fa-xs"></i></span>` : ''}
+                                    ${dateData.videos > 0 ? `<span class="badge bg-success bg-opacity-75" style="font-size: 0.7rem;">${dateData.videos} <i class="fas fa-video fa-xs"></i></span>` : ''}
+                                </div>
+                                <small class="text-muted d-block mt-2" style="font-size: 0.7rem;">${totalFiles} total</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+        }
+
+        mediaGallery.innerHTML = html;
+
+        // Add hover effects to date folder cards
+        setTimeout(() => {
+            document.querySelectorAll('.date-folder-card').forEach(card => {
+                card.addEventListener('mouseenter', function () {
+                    this.style.transform = 'translateY(-4px)';
+                    this.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)';
+                });
+                card.addEventListener('mouseleave', function () {
+                    this.style.transform = 'translateY(0)';
+                    this.style.boxShadow = '';
+                });
+            });
+        }, 100);
+
+    } catch (error) {
+        console.error('Error loading location media:', error);
+        mediaGallery.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Error loading ${locationName} folders. Please try again.
+            </div>
+        `;
+    }
+}
+
+async function loadDateMedia(locationName, dateStr) {
+    const mediaGallery = document.getElementById('mediaGallery');
+    if (!mediaGallery) return;
+
+    // Show loading
+    mediaGallery.innerHTML = `
+        <div class="text-center p-4">
+            <i class="fas fa-spinner fa-spin fa-2x"></i><br>
+            Loading media files...
+        </div>
+    `;
+
+    try {
+        const dateRef = storage.ref(`media/${locationName}/${dateStr}/`);
+        const result = await dateRef.listAll();
+
+        const imageFiles = [];
+        const videoFiles = [];
+
+        for (const item of result.items) {
+            const fileName = item.name.toLowerCase();
+            const downloadURL = await item.getDownloadURL();
+
+            if (fileName.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+                imageFiles.push({ name: item.name, url: downloadURL, ref: item });
+            } else if (fileName.match(/\.(mp4|mov|avi|webm)$/)) {
+                videoFiles.push({ name: item.name, url: downloadURL, ref: item });
+            }
+        }
+
+        let html = `
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
+                <div>
+                    <h5 class="mb-1"><i class='fas fa-calendar-alt text-primary me-2'></i>${dateStr}</h5>
+                    <small class="text-muted">${imageFiles.length} images, ${videoFiles.length} videos</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="loadLocationMedia('${locationName}')">
+                        <i class="fas fa-arrow-left me-1"></i><span class="d-none d-md-inline">Back to ${locationName}</span><span class="d-md-none">Back</span>
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="showUploadModal()">
+                        <i class="fas fa-upload me-1"></i><span class="d-none d-sm-inline">Upload</span>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        if (imageFiles.length === 0 && videoFiles.length === 0) {
+            html += `
+                <div class="text-center p-4">
+                    <i class="fas fa-images fa-3x text-muted mb-3"></i>
+                    <h6 class="text-muted">No media files found</h6>
+                    <p class="text-muted">Upload some files for this date</p>
+                    <button class="btn btn-primary" onclick="showUploadModal()">
+                        <i class="fas fa-upload me-2"></i>Upload Files
+                    </button>
+                </div>
+            `;
+        } else {
+            html += '<div class="row g-2 g-md-3">';
+
+            // Display images
+            imageFiles.forEach((file, index) => {
+                const shortName = file.name.length > 20 ? file.name.substring(0, 17) + '...' : file.name;
+                html += `
+                    <div class='col-6 col-md-4 col-lg-3'>
+                        <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; overflow: hidden;">
+                            <div class="position-relative" style="cursor: pointer;" onclick="showImageModal('${file.url}', '${locationName} - ${dateStr} - ${file.name}')">
+                                <img src='${file.url}' 
+                                     class='card-img-top' 
+                                     style='width: 100%; height: 160px; object-fit: cover;'
+                                     loading="lazy"
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="d-none align-items-center justify-content-center bg-light position-absolute w-100 h-100" style="height: 160px; top: 0;">
+                                    <div class="text-center text-muted">
+                                        <i class="fas fa-image fa-2x mb-1"></i>
+                                        <small class="d-block">Failed to load</small>
+                                    </div>
+                                </div>
+                                <div class="position-absolute top-0 end-0 m-2">
+                                    <button class="btn btn-sm btn-danger rounded-circle" 
+                                            onclick="event.stopPropagation(); deleteFile('${locationName}', '${dateStr}', '${file.name}', 'image')" 
+                                            title="Delete"
+                                            style="width: 32px; height: 32px; padding: 0; opacity: 0.9;">
+                                        <i class="fas fa-trash fa-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body p-2">
+                                <small class="text-muted text-truncate d-block" style="font-size: 0.7rem;" title="${file.name}">
+                                    <i class="fas fa-image me-1"></i>${shortName}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Display videos
+            videoFiles.forEach((file, index) => {
+                const shortName = file.name.length > 20 ? file.name.substring(0, 17) + '...' : file.name;
+                html += `
+                    <div class='col-6 col-md-4 col-lg-3'>
+                        <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; overflow: hidden;">
+                            <div class="position-relative" style="cursor: pointer;" onclick="showVideoModal('${file.url}', '${locationName} - ${dateStr} - ${file.name}')">
+                                <video class='card-img-top' 
+                                       style='width: 100%; height: 160px; object-fit: cover;'
+                                       muted>
+                                    <source src='${file.url}' type="video/mp4">
+                                </video>
+                                <div class="position-absolute top-50 start-50 translate-middle">
+                                    <i class="fas fa-play-circle fa-3x text-white" style="opacity: 0.8; text-shadow: 0 2px 8px rgba(0,0,0,0.5);"></i>
+                                </div>
+                                <div class="position-absolute top-0 end-0 m-2">
+                                    <button class="btn btn-sm btn-danger rounded-circle" 
+                                            onclick="event.stopPropagation(); deleteFile('${locationName}', '${dateStr}', '${file.name}', 'video')" 
+                                            title="Delete"
+                                            style="width: 32px; height: 32px; padding: 0; opacity: 0.9;">
+                                        <i class="fas fa-trash fa-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body p-2">
+                                <small class="text-muted text-truncate d-block" style="font-size: 0.7rem;" title="${file.name}">
+                                    <i class="fas fa-video me-1"></i>${shortName}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+        }
+
+        mediaGallery.innerHTML = html;
+
+    } catch (error) {
+        console.error('Error loading date media:', error);
+        mediaGallery.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Error loading media files. Please try again.
+            </div>
+        `;
+    }
+}
+
+// Upload files to Firebase Storage
+// Function to detect existing date format and convert accordingly
+async function getExistingDateFormat(location) {
+    try {
+        const locationRef = storage.ref(`media/${location}/`);
+        const result = await locationRef.listAll();
+
+        // Check existing folder names to detect date format
+        for (let folderRef of result.prefixes) {
+            const folderName = folderRef.name;
+
+            // Check for DD-MM-YYYY format (with dash)
+            if (/^\d{2}-\d{2}-\d{4}$/.test(folderName)) {
+                console.log(`Detected format: DD-MM-YYYY from folder ${folderName}`);
+                return 'DD-MM-YYYY';
+            }
+            // Check for DD.MM.YYYY format (with dot)
+            if (/^\d{2}\.\d{2}\.\d{4}$/.test(folderName)) {
+                console.log(`Detected format: DD.MM.YYYY from folder ${folderName}`);
+                return 'DD.MM.YYYY';
+            }
+            // Check for DD/MM/YYYY format (with slash)
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(folderName)) {
+                console.log(`Detected format: DD/MM/YYYY from folder ${folderName}`);
+                return 'DD/MM/YYYY';
+            }
+            // Check for YYYY-MM-DD format (with dash)
+            if (/^\d{4}-\d{2}-\d{2}$/.test(folderName)) {
+                console.log(`Detected format: YYYY-MM-DD from folder ${folderName}`);
+                return 'YYYY-MM-DD';
+            }
+            // Check for YYYY.MM.DD format (with dot)
+            if (/^\d{4}\.\d{2}\.\d{2}$/.test(folderName)) {
+                console.log(`Detected format: YYYY.MM.DD from folder ${folderName}`);
+                return 'YYYY.MM.DD';
+            }
+            // Check for YYYY/MM/DD format (with slash)
+            if (/^\d{4}\/\d{2}\/\d{2}$/.test(folderName)) {
+                console.log(`Detected format: YYYY/MM/DD from folder ${folderName}`);
+                return 'YYYY/MM/DD';
+            }
+        }
+
+        // Default to YYYY-MM-DD if no existing folders
+        console.log('No existing folders found, using default: YYYY-MM-DD');
+        return 'YYYY-MM-DD';
+    } catch (error) {
+        console.error('Error detecting date format:', error);
+        return 'YYYY-MM-DD';
+    }
+}
+
+// Function to convert date to detected format
+function convertDateToFormat(dateString, format) {
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+
+    switch (format) {
+        case 'DD-MM-YYYY':
+            return `${day}-${month}-${year}`;
+        case 'DD.MM.YYYY':
+            return `${day}.${month}.${year}`;
+        case 'DD/MM/YYYY':
+            return `${day}/${month}/${year}`;
+        case 'YYYY-MM-DD':
+            return `${year}-${month}-${day}`;
+        case 'YYYY.MM.DD':
+            return `${year}.${month}.${day}`;
+        case 'YYYY/MM/DD':
+            return `${year}/${month}/${day}`;
+        default:
+            return `${year}-${month}-${day}`;
+    }
+}
+
+// OLD uploadFiles function removed - now using startMediaUpload() instead
+// This eliminates duplicate upload logic
+
+// Delete file from Firebase Storage
+async function deleteFile(location, date, fileName, type) {
+    if (!confirm(`Are you sure you want to delete this ${type}?`)) {
+        return;
+    }
+
+    try {
+        const filePath = `media/${location}/${date}/${fileName}`;
+        const fileRef = storage.ref(filePath);
+        await fileRef.delete();
+
+        // Refresh the current view
+        loadDateMedia(location, date);
+
+        alert('File deleted successfully!');
+    } catch (error) {
+        console.error('Delete error:', error);
+        alert('Failed to delete file. Please try again.');
+    }
+}
+
+// Delete entire date folder and all its contents
+async function deleteFolder(location, date) {
+    if (!confirm(`Are you sure you want to delete the entire folder "${date}" and all its contents?\nThis action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const folderRef = storage.ref(`media/${location}/${date}/`);
+        const result = await folderRef.listAll();
+
+        // Delete all files in the folder
+        const deletePromises = result.items.map(item => item.delete());
+        await Promise.all(deletePromises);
+
+        // Refresh the location view
+        loadLocationMedia(location);
+
+        alert('Folder deleted successfully!');
+    } catch (error) {
+        console.error('Delete folder error:', error);
+        alert('Failed to delete folder. Please try again.');
+    }
+}
+
+// Delete entire location and all its contents
+async function deleteLocation(locationName) {
+    if (!confirm(`Are you sure you want to delete the entire location "${locationName}" and all its contents?\nThis will delete ALL date folders and files for this location.\nThis action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const locationRef = storage.ref(`media/${locationName}/`);
+        const result = await locationRef.listAll();
+
+        // Delete all subfolders and their contents
+        for (const dateRef of result.prefixes) {
+            const dateResult = await dateRef.listAll();
+            const deletePromises = dateResult.items.map(item => item.delete());
+            await Promise.all(deletePromises);
+        }
+
+        // Refresh the main view
+        renderLocationFolders();
+
+        alert('Location deleted successfully!');
+    } catch (error) {
+        console.error('Delete location error:', error);
+        alert('Failed to delete location. Please try again.');
+    }
+}
+
+function showVideoModal(src, title) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.setAttribute('tabindex', '-1');
+    modal.setAttribute('aria-labelledby', 'videoModalLabel');
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="videoModalLabel">${title}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <video src="${src}" controls class="w-100 rounded" style="max-height: 500px;">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+    modal.addEventListener('hidden.bs.modal', function () {
+        document.body.removeChild(modal);
+    });
+}
+
+function showImageModal(src, title) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.setAttribute('tabindex', '-1');
+    modal.setAttribute('aria-labelledby', 'imageModalLabel');
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageModalLabel">${title}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="${src}" class="img-fluid rounded">
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+    modal.addEventListener('hidden.bs.modal', function () {
+        document.body.removeChild(modal);
+    });
+}
+
+
+// Bulk upload functionality
+function showBulkUploadModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.setAttribute('tabindex', '-1');
+    modal.setAttribute('aria-labelledby', 'bulkUploadModalLabel');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('role', 'dialog');
+    modal.innerHTML = `
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content shadow-lg">
+                <div class="modal-header bg-gradient-primary text-white">
+                    <h5 class="modal-title fw-bold" id="bulkUploadModalLabel">
+                        <i class="fas fa-cloud-upload-alt me-2"></i>Bulk Media Upload Center
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <!-- Upload Type Selection -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body p-3">
+                                    <h6 class="card-title text-primary mb-3">
+                                        <i class="fas fa-cog me-2"></i>Upload Configuration
+                                    </h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold text-secondary">Upload Type:</label>
+                                            <div class="d-flex gap-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="uploadType" id="uploadFiles" value="files" checked>
+                                                    <label class="form-check-label" for="uploadFiles">
+                                                        <i class="fas fa-file me-1"></i>Multiple Files
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="uploadType" id="uploadFolder" value="folder">
+                                                    <label class="form-check-label" for="uploadFolder">
+                                                        <i class="fas fa-folder me-1"></i>Entire Folder
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold text-secondary">Organization:</label>
+                                            <div class="d-flex gap-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="organizeBy" id="organizeByDate" value="date" checked>
+                                                    <label class="form-check-label" for="organizeByDate">
+                                                        <i class="fas fa-calendar me-1"></i>By Date
+                                                    </label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="organizeBy" id="organizeByLocation" value="location">
+                                                    <label class="form-check-label" for="organizeByLocation">
+                                                        <i class="fas fa-map-marker-alt me-1"></i>By Location
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- File Selection Area -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card h-100 border-primary border-opacity-25">
+                                <div class="card-header bg-primary bg-opacity-10">
+                                    <h6 class="card-title mb-0 text-primary">
+                                        <i class="fas fa-upload me-2"></i>File Selection
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="upload-drop-zone border-2 border-dashed border-primary rounded-3 p-4 text-center mb-3" 
+                                         style="background: linear-gradient(135deg, #f8f9ff 0%, #e3f2fd 100%);">
+                                        <div class="mb-3">
+                                            <i class="fas fa-cloud-upload-alt fa-3x text-primary opacity-75"></i>
+                                        </div>
+                                        <input type="file" id="bulkMediaFiles" class="form-control form-control-lg" multiple accept="image/*,video/*" required>
+                                        <div class="mt-2">
+                                            <small id="uploadHelpText" class="text-muted fw-medium">
+                                                Select multiple images and videos for bulk upload
+                                            </small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="locationSelectDiv" class="mt-3" style="display:none;">
+                                        <div class="alert alert-info alert-dismissible d-flex align-items-center" role="alert">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <div>
+                                                <strong>Location Mode:</strong> All files will be organized under the selected location.
+                                            </div>
+                                        </div>
+                                        <label class="form-label fw-semibold">Select Location:</label>
+                                        <select id="bulkLocation" class="form-select form-select-lg">
+                                            <option value="AKURE">📍 AKURE</option>
+                                            <option value="IBADAN">📍 IBADAN</option>
+                                            <option value="IBADAN-MOKOLA">📍 IBADAN-MOKOLA</option>
+                                            <option value="ADO-EKITI">📍 ADO-EKITI</option>
+                                            <option value="ILORIN">📍 ILORIN</option>
+                                            <option value="OSOGBO">📍 OSOGBO</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card h-100 border-success border-opacity-25">
+                                <div class="card-header bg-success bg-opacity-10">
+                                    <h6 class="card-title mb-0 text-success">
+                                        <i class="fas fa-eye me-2"></i>Smart Preview
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="bulkFilePreview" class="preview-area border rounded-3 p-3" 
+                                         style="max-height: 350px; overflow-y: auto; background: #f8f9fa;">
+                                        <div class="text-center text-muted">
+                                            <i class="fas fa-image fa-2x mb-2 opacity-50"></i>
+                                            <p class="mb-0">Select files to see preview and Firebase paths</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="manualAssignDiv" class="mt-4" style="display:none;">
+                        <div class="card border-warning border-opacity-25">
+                            <div class="card-header bg-warning bg-opacity-10">
+                                <h6 class="card-title mb-0 text-warning-emphasis">
+                                    <i class="fas fa-cogs me-2"></i>Manual File Assignment
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="manualFileList" class="row"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="bulkUploadProgress" class="mt-4" style="display:none;">
+                        <div class="card border-info border-opacity-25">
+                            <div class="card-header bg-info bg-opacity-10">
+                                <h6 class="card-title mb-0 text-info">
+                                    <i class="fas fa-spinner fa-spin me-2"></i>Upload Progress
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="progress mb-3" style="height: 8px;">
+                                    <div id="bulkUploadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         style="width:0%"></div>
+                                </div>
+                                <div id="bulkUploadStatus" class="text-center fw-medium"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top">
+                    <div class="d-flex justify-content-between w-100 align-items-center">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>Smart folder detection automatically organizes your files
+                        </small>
+                        <div>
+                            <button type="button" class="btn btn-outline-secondary me-2" data-bs-dismiss="modal">
+                                <i class="fas fa-times me-1"></i>Cancel
+                            </button>
+                            <button type="button" class="btn btn-primary btn-lg" onclick="startBulkUpload()">
+                                <i class="fas fa-rocket me-2"></i>Start Upload
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+
+    // Fix accessibility: Remove aria-hidden when modal is shown
+    modal.addEventListener('shown.bs.modal', function () {
+        modal.removeAttribute('aria-hidden');
+    });
+
+    modal.addEventListener('hidden.bs.modal', function () {
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.removeChild(modal);
+    });
+
+    bsModal.show();
+
+    // Handle upload type change
+    document.querySelectorAll('input[name="uploadType"]').forEach(radio => {
+        radio.addEventListener('change', function () {
+            const fileInput = document.getElementById('bulkMediaFiles');
+            const helpText = document.getElementById('uploadHelpText');
+
+            if (this.value === 'folder') {
+                fileInput.setAttribute('webkitdirectory', '');
+                fileInput.removeAttribute('multiple');
+                helpText.textContent = 'Select an entire folder to upload all images and videos inside it';
+            } else {
+                fileInput.removeAttribute('webkitdirectory');
+                fileInput.setAttribute('multiple', '');
+                helpText.textContent = 'Select multiple images and videos for bulk upload';
+            }
+
+            // Clear previous selection
+            fileInput.value = '';
+            updateBulkFilePreview();
+        });
+    });
+
+    // Handle organization method change
+    document.querySelectorAll('input[name="organizeBy"]').forEach(radio => {
+        radio.addEventListener('change', function () {
+            const locationDiv = document.getElementById('locationSelectDiv');
+            const manualDiv = document.getElementById('manualAssignDiv');
+
+            if (this.value === 'location') {
+                locationDiv.style.display = 'block';
+                manualDiv.style.display = 'none';
+            } else if (this.value === 'manual') {
+                locationDiv.style.display = 'none';
+                manualDiv.style.display = 'block';
+                updateManualFileList();
+            } else {
+                locationDiv.style.display = 'none';
+                manualDiv.style.display = 'none';
+            }
+        });
+    });
+
+    // Handle file selection
+    document.getElementById('bulkMediaFiles').addEventListener('change', function () {
+        updateBulkFilePreview();
+        const organizeManual = document.getElementById('organizeManual');
+        if (organizeManual && organizeManual.checked) {
+            updateManualFileList();
+        }
+    });
+}
+
+function updateBulkFilePreview() {
+    const files = document.getElementById('bulkMediaFiles').files;
+    const preview = document.getElementById('bulkFilePreview');
+    const uploadType = document.querySelector('input[name="uploadType"]:checked').value;
+    preview.innerHTML = '';
+
+    if (files.length === 0) {
+        preview.innerHTML = '<p class="text-muted text-center">Select files or folder to see preview</p>';
+        return;
+    }
+
+    if (uploadType === 'folder') {
+        // Show folder structure with smart detection
+        const folders = new Map();
+        Array.from(files).forEach(file => {
+            const pathParts = file.webkitRelativePath.split('/');
+            const rootFolderName = pathParts[0];
+            const fileName = pathParts[pathParts.length - 1];
+
+            // Smart detection logic - matches upload logic exactly
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            const dateRegex2 = /^\d{2}-\d{2}-\d{4}$/;
+            let finalPath;
+
+            if (dateRegex.test(rootFolderName) || dateRegex2.test(rootFolderName)) {
+                // Date folder: media/2025-12-31/image.jpg
+                finalPath = `media/${rootFolderName}/${fileName}`;
+            } else if (pathParts.length > 1) {
+                // Location folder with substructure - preserve complete path
+                let subPath = pathParts.slice(1).join('/');
+                finalPath = `media/${rootFolderName}/${subPath}`;
+            } else {
+                // Simple location folder: media/LOCATION/today/image.jpg
+                const today = new Date().toISOString().slice(0, 10);
+                finalPath = `media/${rootFolderName}/${today}/${fileName}`;
+            }
+
+            if (!folders.has(rootFolderName)) {
+                folders.set(rootFolderName, []);
+            }
+            folders.get(rootFolderName).push({ file, finalPath });
+        });
+
+        preview.innerHTML = `<p class="mb-2"><strong>Smart Folder Detection (${files.length} files)</strong></p>`;
+
+        folders.forEach((folderFiles, folderName) => {
+            const folderDiv = document.createElement('div');
+            folderDiv.className = 'mb-3 p-2 border rounded bg-light';
+            folderDiv.innerHTML = `
+                <div class="fw-bold mb-2">
+                    <i class="fas fa-folder text-warning me-2"></i>${folderName} → Firebase Paths:
+                </div>
+            `;
+
+            const filesList = document.createElement('div');
+            filesList.className = 'ms-3';
+
+            folderFiles.slice(0, 5).forEach(({ file, finalPath }) => {
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'mb-1 small';
+
+                if (file.type.startsWith('image/')) {
+                    fileDiv.innerHTML = `<i class="fas fa-image text-success me-1"></i><strong>${finalPath}</strong>`;
+                } else if (file.type.startsWith('video/')) {
+                    fileDiv.innerHTML = `<i class="fas fa-video text-info me-1"></i><strong>${finalPath}</strong>`;
+                }
+
+                filesList.appendChild(fileDiv);
+            });
+
+            if (folderFiles.length > 5) {
+                const moreDiv = document.createElement('div');
+                moreDiv.className = 'small text-muted';
+                moreDiv.innerHTML = `<i class="fas fa-ellipsis-h me-1"></i>and ${folderFiles.length - 5} more files`;
+                filesList.appendChild(moreDiv);
+            }
+
+            folderDiv.appendChild(filesList);
+            preview.appendChild(folderDiv);
+        });
+    } else {
+        // Show individual files
+        preview.innerHTML = `<p class="mb-2"><strong>${files.length} files selected</strong></p>`;
+
+        Array.from(files).slice(0, 10).forEach((file, index) => {
+            const fileDiv = document.createElement('div');
+            fileDiv.className = 'mb-2 p-2 border rounded';
+
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    fileDiv.innerHTML = `
+                        <div class="d-flex align-items-center">
+                            <img src="${e.target.result}" class="me-2" style="width:40px;height:40px;object-fit:cover;border-radius:4px;">
+                            <div>
+                                <div class="fw-bold">${file.name}</div>
+                                <small class="text-muted">Image • ${(file.size / 1024).toFixed(1)} KB</small>
+                            </div>
+                        </div>
+                    `;
+                };
+                reader.readAsDataURL(file);
+            } else if (file.type.startsWith('video/')) {
+                fileDiv.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <div class="me-2 d-flex align-items-center justify-content-center bg-dark text-white" style="width:40px;height:40px;border-radius:4px;">
+                            <i class="fas fa-video"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold">${file.name}</div>
+                            <small class="text-muted">Video • ${(file.size / 1024 / 1024).toFixed(1)} MB</small>
+                        </div>
+                    </div>
+                `;
+            }
+
+            preview.appendChild(fileDiv);
+        });
+
+        if (files.length > 10) {
+            const moreDiv = document.createElement('div');
+            moreDiv.className = 'text-center text-muted';
+            moreDiv.innerHTML = `<small>... and ${files.length - 10} more files</small>`;
+            preview.appendChild(moreDiv);
+        }
+    }
+}
+
+function updateManualFileList() {
+    const files = document.getElementById('bulkMediaFiles').files;
+    const listDiv = document.getElementById('manualFileList');
+    listDiv.innerHTML = '';
+
+    Array.from(files).forEach((file, index) => {
+        const col = document.createElement('div');
+        col.className = 'col-md-6 mb-3';
+        col.innerHTML = `
+            <div class="border rounded p-3">
+                <div class="mb-2">
+                    <strong>${file.name}</strong>
+                    <small class="text-muted d-block">${file.type.startsWith('image/') ? 'Image' : 'Video'}</small>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label">Location</label>
+                        <select class="form-select form-select-sm" data-file-index="${index}" data-field="location">
+                            <option value="AKURE">AKURE</option>
+                            <option value="IBADAN">IBADAN</option>
+                            <option value="IBADAN-MOKOLA">IBADAN-MOKOLA</option>
+                            <option value="ADO-EKITI">ADO-EKITI</option>
+                            <option value="ILORIN">ILORIN</option>
+                            <option value="OSOGBO">OSOGBO</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Date</label>
+                        <input type="date" class="form-control form-control-sm" data-file-index="${index}" data-field="date" value="${new Date().toISOString().slice(0, 10)}">
+                    </div>
+                </div>
+            </div>
+        `;
+        listDiv.appendChild(col);
+    });
+}
+
+async function startBulkUpload() {
+    const files = document.getElementById('bulkMediaFiles').files;
+    const organizeBy = document.querySelector('input[name="organizeBy"]:checked').value;
+    const uploadType = document.querySelector('input[name="uploadType"]:checked').value;
+
+    if (files.length === 0) {
+        alert('Please select files or folder to upload');
+        return;
+    }
+
+    const progressDiv = document.getElementById('bulkUploadProgress');
+    const progressBar = document.getElementById('bulkUploadProgressBar');
+    const statusDiv = document.getElementById('bulkUploadStatus');
+
+    progressDiv.style.display = 'block';
+
+    // Upload tracking
+    const uploadReport = {
+        total: files.length,
+        uploaded: [],
+        skipped: [],
+        failed: []
+    };
+
+    try {
+        const today = new Date().toISOString().slice(0, 10);
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            let filePath, location, date, fileName;
+
+            if (uploadType === 'folder') {
+                const pathParts = file.webkitRelativePath.split('/');
+                const rootFolderName = pathParts[0];
+                fileName = pathParts[pathParts.length - 1];
+
+                const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                const dateRegex2 = /^\d{2}-\d{2}-\d{4}$/;
+
+                if (dateRegex.test(rootFolderName) || dateRegex2.test(rootFolderName)) {
+                    filePath = `media/${rootFolderName}/${fileName}`;
+                    location = 'ROOT';
+                    date = rootFolderName;
+                } else if (pathParts.length > 1) {
+                    let subPath = pathParts.slice(1).join('/');
+                    filePath = `media/${rootFolderName}/${subPath}`;
+                    location = rootFolderName;
+                    date = pathParts[1] || today;
+                } else {
+                    filePath = `media/${rootFolderName}/${today}/${fileName}`;
+                    location = rootFolderName;
+                    date = today;
+                }
+            } else {
+                if (organizeBy === 'date') {
+                    const fileDate = new Date(file.lastModified);
+                    date = fileDate.toISOString().slice(0, 10);
+                    location = 'AUTO_' + date.replace(/-/g, '');
+                } else if (organizeBy === 'location') {
+                    location = document.getElementById('bulkLocation').value;
+                    date = today;
+                } else {
+                    const locationSelect = document.querySelector(`select[data-file-index="${i}"][data-field="location"]`);
+                    const dateInput = document.querySelector(`input[data-file-index="${i}"][data-field="date"]`);
+                    location = locationSelect.value;
+                    date = dateInput.value;
+                }
+
+                const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                fileName = sanitizedName;
+                filePath = `media/${location}/${date}/${fileName}`;
+            }
+
+            const progress = ((i + 1) / files.length) * 100;
+            progressBar.style.width = progress + '%';
+            statusDiv.innerHTML = `Processing ${file.name}... (${i + 1}/${files.length})`;
+
+            try {
+                const storageRef = storage.ref(filePath);
+
+                // Check if file exists in THIS specific location/date folder
+                try {
+                    await storageRef.getMetadata();
+                    // File exists - skip it
+                    uploadReport.skipped.push({
+                        name: file.name,
+                        reason: `Already exists in ${location}/${date}`,
+                        path: filePath
+                    });
+                    statusDiv.innerHTML = `<span class="text-warning">⚠️ Skipped: ${file.name} (duplicate)</span>`;
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    continue;
+                } catch (metadataError) {
+                    if (metadataError.code !== 'storage/object-not-found') {
+                        throw metadataError;
+                    }
+                }
+
+                // Upload the file
+                await storageRef.put(file);
+                uploadReport.uploaded.push({
+                    name: file.name,
+                    location: location,
+                    date: date,
+                    path: filePath
+                });
+                statusDiv.innerHTML = `<span class="text-success">✅ Uploaded: ${file.name}</span>`;
+                await new Promise(resolve => setTimeout(resolve, 300));
+
+            } catch (uploadError) {
+                console.error('Upload error for file:', file.name, uploadError);
+                uploadReport.failed.push({
+                    name: file.name,
+                    reason: uploadError.message,
+                    path: filePath
+                });
+                statusDiv.innerHTML = `<span class="text-danger">❌ Failed: ${file.name}</span>`;
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Show detailed upload report
+        showUploadReport(uploadReport);
+
+        setTimeout(() => {
+            // Reset form fields
+            const fileInput = document.getElementById('bulkMediaFiles');
+            if (fileInput) {
+                fileInput.value = '';
+                fileInput.removeAttribute('webkitdirectory');
+                fileInput.setAttribute('multiple', '');
+            }
+
+            const uploadTypeRadios = document.querySelectorAll('input[name="uploadType"]');
+            if (uploadTypeRadios.length > 0) {
+                uploadTypeRadios[0].checked = true;
+            }
+
+            const organizeByRadios = document.querySelectorAll('input[name="organizeBy"]');
+            if (organizeByRadios.length > 0) {
+                organizeByRadios[0].checked = true;
+            }
+
+            // Reset progress
+            progressBar.style.width = '0%';
+            progressDiv.style.display = 'none';
+            document.getElementById('bulkLocation').value = 'AKURE';
+            document.getElementById('bulkLocation').style.display = 'none';
+            statusDiv.innerHTML = '';
+            document.getElementById('bulkFilePreview').innerHTML = '';
+
+            // Close modal
+            const modalElement = document.getElementById('bulkUploadModal');
+            if (modalElement) {
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) {
+                    modal.hide();
+                }
+            }
+
+            // Refresh view
+            renderLocationFolders();
+        }, 2000);
+
+    } catch (error) {
+        console.error('Bulk upload error:', error);
+        statusDiv.innerHTML = '<span class="text-danger">Upload failed. Please try again.</span>';
+    }
+}
+
+// Show detailed upload report
+function showUploadReport(report) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="fas fa-file-upload me-2"></i>Upload Report</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-4">
+                        <div class="col-4 text-center">
+                            <div class="p-3 bg-light rounded">
+                                <h3 class="text-primary mb-1">${report.total}</h3>
+                                <small class="text-muted">Total Files</small>
+                            </div>
+                        </div>
+                        <div class="col-4 text-center">
+                            <div class="p-3 bg-success bg-opacity-10 rounded">
+                                <h3 class="text-success mb-1">${report.uploaded.length}</h3>
+                                <small class="text-muted">Uploaded</small>
+                            </div>
+                        </div>
+                        <div class="col-4 text-center">
+                            <div class="p-3 bg-warning bg-opacity-10 rounded">
+                                <h3 class="text-warning mb-1">${report.skipped.length}</h3>
+                                <small class="text-muted">Skipped</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${report.uploaded.length > 0 ? `
+                        <h6 class="text-success"><i class="fas fa-check-circle me-2"></i>Successfully Uploaded (${report.uploaded.length})</h6>
+                        <div class="list-group mb-3">
+                            ${report.uploaded.map(f => `
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong>${f.name}</strong>
+                                            <br><small class="text-muted">${f.location} / ${f.date}</small>
+                                        </div>
+                                        <span class="badge bg-success">✓</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+
+                    ${report.skipped.length > 0 ? `
+                        <h6 class="text-warning"><i class="fas fa-exclamation-triangle me-2"></i>Skipped Files (${report.skipped.length})</h6>
+                        <div class="list-group mb-3">
+                            ${report.skipped.map(f => `
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong>${f.name}</strong>
+                                            <br><small class="text-muted">${f.reason}</small>
+                                        </div>
+                                        <span class="badge bg-warning">⚠</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+
+                    ${report.failed.length > 0 ? `
+                        <h6 class="text-danger"><i class="fas fa-times-circle me-2"></i>Failed Uploads (${report.failed.length})</h6>
+                        <div class="list-group">
+                            ${report.failed.map(f => `
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong>${f.name}</strong>
+                                            <br><small class="text-danger">${f.reason}</small>
+                                        </div>
+                                        <span class="badge bg-danger">✗</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+
+    modal.addEventListener('hidden.bs.modal', function () {
+        document.body.removeChild(modal);
+    });
+
+    bsModal.show();
+}
 
 // iOS Safari Compatibility Fixes
 
@@ -595,7 +1931,7 @@ const MASTER_LOGIN = {
 
 // Section permissions based on roles
 const SECTION_PERMISSIONS = {
-    [ACCESS_LEVELS.ADMIN]: ['dashboard', 'register-stylist', 'braiding-form', 'stylists', 'sale-order-form', 'sale-order-report', 'stylist-report', 'customers', 'payment-request', 'payments', 'reports', 'user-management', 'settings'],
+    [ACCESS_LEVELS.ADMIN]: ['dashboard', 'register-stylist', 'braiding-form', 'stylists', 'sale-order-form', 'sale-order-report', 'stylist-report', 'customers', 'payment-request', 'payments', 'reports', 'user-management', 'settings', 'media-section'],
     [ACCESS_LEVELS.MANAGER]: ['dashboard', 'stylists', 'customers', 'payments', 'reports'],
     [ACCESS_LEVELS.USER]: ['dashboard', 'stylists', 'customers'],
     [ACCESS_LEVELS.VIEWER]: ['dashboard', 'reports']
@@ -10860,3 +12196,824 @@ document.addEventListener('click', function (e) {
     }
 });
 
+
+// Show media section when sidebar link is clicked
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.nav-link').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            if (this.getAttribute('href') === '#media-section') {
+                e.preventDefault();
+                document.querySelectorAll('.dashboard-section').forEach(function (sec) { sec.style.display = 'none'; });
+                document.getElementById('media-section').style.display = 'block';
+                // Load media when section is shown
+                loadMediaGallery();
+            }
+        });
+    });
+});
+
+// Media Gallery Functions
+let mediaFiles = [];
+let currentUploadTask = null;
+
+// Diagnostic function to check Firebase Storage connectivity
+async function diagnoseFirebaseStorage() {
+    console.log('🔍 Running Firebase Storage Diagnostics...');
+
+    try {
+        // Test 1: Check if storage is initialized
+        console.log('✅ Storage reference:', storage ? 'Available' : '❌ Not initialized');
+
+        // Test 2: List media folder contents
+        const mediaRef = storage.ref('media');
+        console.log('📁 Listing media folder...');
+        const result = await mediaRef.listAll();
+        console.log(`✅ Found ${result.prefixes.length} location folders, ${result.items.length} root files`);
+
+        // Test 3: Check each location folder
+        for (const folderRef of result.prefixes) {
+            console.log(`📍 Checking location: ${folderRef.name}`);
+            const locationResult = await folderRef.listAll();
+            console.log(`  📅 Date folders: ${locationResult.prefixes.length}`);
+
+            for (const dateRef of locationResult.prefixes) {
+                const dateResult = await dateRef.listAll();
+                console.log(`    📁 ${dateRef.name}: ${dateResult.items.length} files`);
+
+                // Test first file from each date folder
+                if (dateResult.items.length > 0) {
+                    const testFile = dateResult.items[0];
+                    try {
+                        const url = await testFile.getDownloadURL();
+                        console.log(`    ✅ Sample file URL generated: ${testFile.name}`);
+
+                        // Test URL accessibility
+                        const response = await fetch(url, { method: 'HEAD' });
+                        console.log(`    ${response.ok ? '✅' : '❌'} URL accessibility: ${response.status}`);
+                    } catch (urlError) {
+                        console.log(`    ❌ Failed to get URL for ${testFile.name}:`, urlError);
+                    }
+                }
+            }
+        }
+
+        console.log('🎯 Diagnostics completed!');
+    } catch (error) {
+        console.error('❌ Diagnostic error:', error);
+    }
+}
+
+// Load Media Gallery
+async function loadMediaGallery() {
+    try {
+        showMediaMessage('Loading media files...', 'info');
+
+        // Get list of all files from Firebase Storage
+        const mediaRef = storage.ref('media');
+        const result = await mediaRef.listAll();
+
+        const files = [];
+        const locations = new Set();
+        const dates = new Set();
+
+        // Process each subfolder (locations)
+        for (const folderRef of result.prefixes) {
+            const locationName = folderRef.name;
+            locations.add(locationName);
+
+            // Get subfolders (dates) in each location
+            const locationResult = await folderRef.listAll();
+
+            for (const dateRef of locationResult.prefixes) {
+                const dateName = dateRef.name;
+                dates.add(dateName);
+
+                // Get files in each date folder
+                const dateResult = await dateRef.listAll();
+
+                for (const fileRef of dateResult.items) {
+                    try {
+                        // Skip system files and invalid file types
+                        if (fileRef.name.startsWith('.') || fileRef.name.includes('__')) {
+                            continue;
+                        }
+
+                        // Get metadata first to validate file
+                        const metadata = await fileRef.getMetadata();
+
+                        // Skip files without proper content type
+                        if (!metadata.contentType) {
+                            console.warn(`Skipping file with no content type: ${fileRef.fullPath}`);
+                            continue;
+                        }
+
+                        // Get download URL with error handling
+                        let url;
+                        try {
+                            url = await fileRef.getDownloadURL();
+                        } catch (urlError) {
+                            console.error(`Failed to get download URL for ${fileRef.fullPath}:`, urlError);
+                            continue;
+                        }
+
+                        files.push({
+                            name: fileRef.name,
+                            fullPath: fileRef.fullPath,
+                            url: url,
+                            location: locationName,
+                            date: dateName,
+                            size: metadata.size,
+                            timeCreated: metadata.timeCreated,
+                            contentType: metadata.contentType,
+                            ref: fileRef // Store reference for future operations
+                        });
+                    } catch (error) {
+                        console.error(`Error loading file ${fileRef.fullPath}:`, error);
+
+                        // For 404 errors, try to re-upload the file if it exists locally
+                        if (error.code === 'storage/object-not-found') {
+                            console.warn(`File not found in storage: ${fileRef.fullPath}`);
+                        }
+                    }
+                }
+            }
+        }
+
+        mediaFiles = files;
+        updateMediaFilters(Array.from(locations), Array.from(dates));
+        displayMediaFiles(files);
+        updateMediaStats(files);
+
+    } catch (error) {
+        console.error('Error loading media gallery:', error);
+        showMediaMessage('Error loading media files. Please check if files are uploaded correctly.', 'danger');
+
+        // Show empty state
+        document.getElementById('mediaGrid').innerHTML = `
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-images fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Media Files Found</h5>
+                <p class="text-muted">Upload some images to get started</p>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadMediaModal">
+                    <i class="fas fa-upload me-2"></i>Upload Media
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Update Media Filters
+function updateMediaFilters(locations, dates) {
+    const locationFilter = document.getElementById('mediaLocationFilter');
+    const dateFilter = document.getElementById('mediaDateFilter');
+
+    // Update locations
+    locationFilter.innerHTML = '<option value="">All Locations</option>';
+    locations.forEach(location => {
+        const option = document.createElement('option');
+        option.value = location;
+        option.textContent = location;
+        locationFilter.appendChild(option);
+    });
+
+    // Update dates
+    dateFilter.innerHTML = '<option value="">All Dates</option>';
+    dates.sort().reverse().forEach(date => {
+        const option = document.createElement('option');
+        option.value = date;
+        option.textContent = formatDateString(date);
+        dateFilter.appendChild(option);
+    });
+
+    // Add event listeners for filters
+    locationFilter.addEventListener('change', filterMediaFiles);
+    dateFilter.addEventListener('change', filterMediaFiles);
+    document.getElementById('mediaSearch').addEventListener('input', filterMediaFiles);
+}
+
+// Display Media Files
+function displayMediaFiles(files) {
+    const mediaGrid = document.getElementById('mediaGrid');
+
+    if (files.length === 0) {
+        mediaGrid.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Files Found</h5>
+                <p class="text-muted">Try adjusting your filters</p>
+            </div>
+        `;
+        return;
+    }
+
+    mediaGrid.innerHTML = files.map(file => {
+        const isImage = file.contentType && file.contentType.startsWith('image/');
+        const isVideo = file.contentType && file.contentType.startsWith('video/');
+
+        return `
+            <div class="col-6 col-md-4 col-lg-3 mb-2 mb-md-3">
+                <div class="card media-card h-100 border-0 shadow-sm" onclick="previewMedia('${file.fullPath}')">
+                    <div class="position-relative">
+                        ${isImage ? `
+                            <img src="${file.url}" class="card-img-top" style="height: 120px; height: 160px; object-fit: cover;" 
+                                 alt="${file.name}" loading="lazy" 
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                            <div class="d-none align-items-center justify-content-center bg-light position-absolute w-100 h-100" 
+                                 style="height: 160px; top: 0;">
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-image fa-2x mb-1"></i>
+                                    <small class="d-block">Failed to load</small>
+                                </div>
+                            </div>
+                        ` : isVideo ? `
+                            <video class="card-img-top" style="height: 160px; object-fit: cover;" muted loading="lazy">
+                                <source src="${file.url}" type="${file.contentType}">
+                            </video>
+                            <div class="position-absolute top-50 start-50 translate-middle">
+                                <i class="fas fa-play-circle fa-2x text-white opacity-75"></i>
+                            </div>
+                        ` : `
+                            <div class="d-flex align-items-center justify-content-center bg-light" style="height: 160px;">
+                                <i class="fas fa-file fa-2x text-muted"></i>
+                            </div>
+                        `}
+                        <div class="position-absolute top-0 end-0 m-1 m-md-2">
+                            <span class="badge bg-primary small" style="font-size: 0.6rem;">${file.location}</span>
+                        </div>
+                        <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-50 text-white p-1 p-md-2">
+                            <small class="d-block text-truncate" style="font-size: 0.65rem;">${file.name}</small>
+                        </div>
+                    </div>
+                    <div class="card-body p-1 p-md-2">
+                        <small class="text-muted d-block" style="font-size: 0.65rem;">
+                            <i class="fas fa-calendar me-1"></i>${formatDateString(file.date)}
+                            <span class="d-block">
+                                <i class="fas fa-hdd me-1"></i>${formatFileSize(file.size)}
+                            </span>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Preview Media
+async function previewMedia(filePath) {
+    try {
+        const file = mediaFiles.find(f => f.fullPath === filePath);
+        if (!file) return;
+
+        const modal = new bootstrap.Modal(document.getElementById('imagePreviewModal'));
+
+        // Update modal content
+        document.getElementById('imagePreviewTitle').textContent = file.name;
+        document.getElementById('previewImage').src = file.url;
+        document.getElementById('imageFilename').textContent = file.name;
+        document.getElementById('imageLocation').textContent = file.location;
+        document.getElementById('imageDate').textContent = formatDateString(file.date);
+        document.getElementById('imageSize').textContent = formatFileSize(file.size);
+        document.getElementById('imageURL').href = file.url;
+        document.getElementById('imageUploadTime').textContent = new Date(file.timeCreated).toLocaleString();
+
+        // Set delete button data
+        document.getElementById('deleteImageBtn').setAttribute('data-file-path', filePath);
+
+        modal.show();
+    } catch (error) {
+        console.error('Error previewing media:', error);
+        showAlert('Error loading media preview', 'danger');
+    }
+}
+
+// Filter Media Files
+function filterMediaFiles() {
+    const locationFilter = document.getElementById('mediaLocationFilter').value;
+    const dateFilter = document.getElementById('mediaDateFilter').value;
+    const searchQuery = document.getElementById('mediaSearch').value.toLowerCase();
+
+    const filtered = mediaFiles.filter(file => {
+        const matchesLocation = !locationFilter || file.location === locationFilter;
+        const matchesDate = !dateFilter || file.date === dateFilter;
+        const matchesSearch = !searchQuery || file.name.toLowerCase().includes(searchQuery);
+
+        return matchesLocation && matchesDate && matchesSearch;
+    });
+
+    displayMediaFiles(filtered);
+}
+
+// Clear Media Filters
+function clearMediaFilters() {
+    document.getElementById('mediaLocationFilter').value = '';
+    document.getElementById('mediaDateFilter').value = '';
+    document.getElementById('mediaSearch').value = '';
+    displayMediaFiles(mediaFiles);
+}
+
+// Update Media Stats
+function updateMediaStats(files) {
+    const totalFiles = files.length;
+    const uniqueLocations = new Set(files.map(f => f.location)).size;
+    const totalSize = files.reduce((sum, f) => sum + (f.size || 0), 0);
+    const recentFiles = files.filter(f => {
+        const fileDate = new Date(f.timeCreated);
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        return fileDate > weekAgo;
+    }).length;
+
+    document.getElementById('totalMediaCount').textContent = totalFiles;
+    document.getElementById('uniqueLocationsCount').textContent = uniqueLocations;
+    document.getElementById('recentUploadsCount').textContent = recentFiles;
+    document.getElementById('totalStorageSize').textContent = formatFileSize(totalSize);
+}
+
+// Upload Media Functions
+document.addEventListener('DOMContentLoaded', function () {
+    // Set today's date as default
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('uploadDate').value = today;
+
+    // Upload button event
+    document.getElementById('startUploadBtn').addEventListener('click', startMediaUpload);
+
+    // Cancel upload
+    document.getElementById('cancelUploadBtn').addEventListener('click', cancelMediaUpload);
+
+    // Delete image button
+    document.getElementById('deleteImageBtn').addEventListener('click', deleteMediaFile);
+});
+
+// Start Media Upload
+async function startMediaUpload() {
+    const locationSelect = document.getElementById('uploadLocation');
+    const dateInput = document.getElementById('uploadDate');
+    const filesInput = document.getElementById('mediaFiles');
+
+    if (!locationSelect || !dateInput || !filesInput) {
+        console.error('Form elements not found');
+        return;
+    }
+
+    const location = locationSelect.value;
+    const date = dateInput.value;
+    const files = filesInput.files;
+
+    if (!location || location === '' || !date || date === '' || !files || files.length === 0) {
+        console.log('Please fill all required fields and select files', location, date, files.length);
+        showAlert('Please fill all required fields and select files', 'warning');
+        return;
+    }
+
+    // Show progress
+    document.getElementById('uploadProgress').style.display = 'block';
+    document.getElementById('startUploadBtn').disabled = true;
+    document.getElementById('cancelUploadBtn').textContent = 'Cancel Upload';
+
+    let uploadedCount = 0;
+    let failedCount = 0;
+    const totalFiles = files.length;
+
+    try {
+        // Detect existing date format for this location
+        const dateFormat = await getExistingDateFormat(location);
+        const formattedDate = convertDateToFormat(date, dateFormat);
+
+        updateUploadStatus(`Using date format: ${dateFormat} → ${formattedDate}`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+
+            // Check file size (max 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                showAlert(`File ${file.name} is too large (max 10MB)`, 'warning');
+                failedCount++;
+                continue;
+            }
+
+            const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const fileName = sanitizedName;
+            const storageRef = storage.ref(`media/${location}/${formattedDate}/${fileName}`);
+
+            updateUploadStatus(`Checking ${fileName}...`);
+
+            try {
+                // Check for duplicates
+                try {
+                    await storageRef.getMetadata();
+                    // File exists - skip it
+                    updateUploadStatus(`⚠️ Skipped: ${fileName} (already exists)`);
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    continue;
+                } catch (metadataError) {
+                    if (metadataError.code !== 'storage/object-not-found') {
+                        throw metadataError;
+                    }
+                }
+
+                updateUploadStatus(`Uploading ${fileName}...`);
+
+                // Upload file with progress tracking
+                const uploadTask = storageRef.put(file);
+                currentUploadTask = uploadTask;
+
+                uploadTask.on('state_changed',
+                    (snapshot) => {
+                        const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                        const overallProgress = Math.round(((uploadedCount + progress / 100) / totalFiles) * 100);
+                        updateUploadProgress(overallProgress);
+                    },
+                    (error) => {
+                        console.error(`Upload error for ${fileName}:`, error);
+                        failedCount++;
+                    },
+                    async () => {
+                        // Upload completed successfully
+                        uploadedCount++;
+                        const overallProgress = Math.round((uploadedCount / totalFiles) * 100);
+                        updateUploadProgress(overallProgress);
+                        console.log(`✅ Uploaded: ${fileName}`);
+                    }
+                );
+
+                await uploadTask;
+
+            } catch (error) {
+                console.error(`Failed to upload ${fileName}:`, error);
+                failedCount++;
+            }
+        }
+
+        // Upload completed
+        if (failedCount === 0) {
+            showAlert(`All ${uploadedCount} files uploaded successfully!`, 'success');
+        } else {
+            showAlert(`${uploadedCount} files uploaded, ${failedCount} failed`, 'warning');
+        }
+
+        // Reset form and close modal after delay
+        setTimeout(() => {
+            resetUploadForm();
+            const modalEl = document.getElementById('uploadMediaModal');
+            if (modalEl) {
+                const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+            }
+            // Refresh media gallery
+            renderLocationFolders();
+        }, 1500);
+
+    } catch (error) {
+        console.error('Upload process error:', error);
+        showAlert('Upload failed. Please try again.', 'danger');
+        resetUploadForm();
+    }
+}
+
+// Cancel Media Upload
+function cancelMediaUpload() {
+    if (currentUploadTask) {
+        currentUploadTask.cancel();
+        currentUploadTask = null;
+        showAlert('Upload cancelled', 'info');
+    }
+    resetUploadForm();
+}
+
+// Update Upload Progress
+function updateUploadProgress(percentage) {
+    document.getElementById('uploadPercentage').textContent = `${percentage}%`;
+    document.getElementById('uploadProgressBar').style.width = `${percentage}%`;
+}
+
+// Update Upload Status
+function updateUploadStatus(message) {
+    document.getElementById('uploadStatus').textContent = message;
+}
+
+// Reset Upload Form
+function resetUploadForm() {
+    document.getElementById('uploadMediaForm').reset();
+    document.getElementById('uploadProgress').style.display = 'none';
+    document.getElementById('startUploadBtn').disabled = false;
+    document.getElementById('cancelUploadBtn').textContent = 'Cancel';
+    updateUploadProgress(0);
+    updateUploadStatus('');
+
+    // Set today's date again
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('uploadDate').value = today;
+}
+
+// Delete Media File
+async function deleteMediaFile() {
+    const filePath = document.getElementById('deleteImageBtn').getAttribute('data-file-path');
+
+    if (!filePath) return;
+
+    if (!confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+        return;
+    }
+
+    try {
+        const fileRef = storage.ref(filePath);
+        await fileRef.delete();
+
+        showAlert('File deleted successfully', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('imagePreviewModal')).hide();
+
+        // Refresh media gallery
+        setTimeout(() => {
+            loadMediaGallery();
+        }, 500);
+
+    } catch (error) {
+        console.error('Error deleting file:', error);
+        showAlert('Error deleting file. Please try again.', 'danger');
+    }
+}
+
+// Utility Functions
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatDateString(dateStr) {
+    if (!dateStr) return 'Unknown';
+
+    // Handle DD-MM-YYYY format
+    if (dateStr.includes('-')) {
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            const day = parts[0];
+            const month = parts[1];
+            const year = parts[2];
+            const date = new Date(`${year}-${month}-${day}`);
+            return date.toLocaleDateString();
+        }
+    }
+
+    return dateStr;
+}
+
+function showMediaMessage(message, type = 'info') {
+    const mediaGrid = document.getElementById('mediaGrid');
+    const iconMap = {
+        'info': 'fas fa-info-circle',
+        'danger': 'fas fa-exclamation-triangle',
+        'success': 'fas fa-check-circle',
+        'warning': 'fas fa-exclamation-circle'
+    };
+
+    mediaGrid.innerHTML = `
+        <div class="col-12 text-center py-5">
+            <i class="${iconMap[type] || iconMap.info} fa-3x text-${type} mb-3"></i>
+            <p class="text-${type}">${message}</p>
+        </div>
+    `;
+}
+
+// Add CSS for media cards
+document.addEventListener('DOMContentLoaded', function () {
+    const style = document.createElement('style');
+    style.textContent = `
+        .media-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        
+        .media-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .media-card .card-img-top {
+            transition: opacity 0.2s ease-in-out;
+        }
+        
+        .media-card:hover .card-img-top {
+            opacity: 0.9;
+        }
+    `;
+    document.head.appendChild(style);
+});
+
+// Media Carousel Functions
+async function loadCarouselFilters() {
+    try {
+        const mediaRef = storage.ref('media');
+        const result = await mediaRef.listAll();
+
+        const locations = new Set();
+        const dates = new Set();
+
+        for (const folderRef of result.prefixes) {
+            const locationName = folderRef.name;
+            locations.add(locationName);
+
+            const locationResult = await folderRef.listAll();
+            for (const dateRef of locationResult.prefixes) {
+                dates.add(dateRef.name);
+            }
+        }
+
+        const locationFilter = document.getElementById('carouselLocationFilter');
+        const dateFilter = document.getElementById('carouselDateFilter');
+
+        if (locationFilter) {
+            locationFilter.innerHTML = '<option value="">All Locations</option>';
+            Array.from(locations).sort().forEach(loc => {
+                locationFilter.innerHTML += `<option value="${loc}">${loc}</option>`;
+            });
+        }
+
+        if (dateFilter) {
+            dateFilter.innerHTML = '<option value="">All Dates</option>';
+            Array.from(dates).sort().reverse().forEach(date => {
+                dateFilter.innerHTML += `<option value="${date}">${date}</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('Error loading carousel filters:', error);
+    }
+}
+
+let carouselMediaData = [];
+let currentCarouselIndex = 0;
+let currentCarouselType = 'all'; // 'all', 'image', 'video'
+
+function setCarouselType(type) {
+    currentCarouselType = type;
+
+    // Update button styles
+    document.getElementById('typeImageBtn').style.opacity = type === 'image' ? '1' : '0.7';
+    document.getElementById('typeVideoBtn').style.opacity = type === 'video' ? '1' : '0.7';
+    document.getElementById('typeAllBtn').style.opacity = type === 'all' ? '1' : '0.7';
+
+    filterCarouselMedia();
+}
+
+function navigateCarousel(direction) {
+    const filteredMedia = getFilteredMedia();
+
+    currentCarouselIndex += direction;
+
+    if (currentCarouselIndex < 0) {
+        currentCarouselIndex = 0;
+    } else if (currentCarouselIndex >= filteredMedia.length) {
+        currentCarouselIndex = filteredMedia.length - 1;
+    }
+
+    renderCarouselMedia(filteredMedia);
+}
+
+function getFilteredMedia() {
+    if (currentCarouselType === 'all') {
+        return carouselMediaData;
+    }
+    return carouselMediaData.filter(m => m.type === currentCarouselType);
+}
+
+function renderCarouselMedia(mediaList) {
+    const mainContent = document.getElementById('carouselMainContent');
+    const thumbnailsContainer = document.getElementById('carouselThumbnails');
+    const prevBtn = document.getElementById('carouselPrevBtn');
+    const nextBtn = document.getElementById('carouselNextBtn');
+
+    if (mediaList.length === 0) {
+        mainContent.innerHTML = `
+            <div class="d-flex align-items-center justify-content-center h-100 p-5">
+                <div class="text-center text-muted">
+                    <i class="fas fa-folder-open fa-3x mb-3"></i>
+                    <p>No media found for selected filters</p>
+                </div>
+            </div>
+        `;
+        thumbnailsContainer.innerHTML = '';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        return;
+    }
+
+    // Enable/disable navigation buttons
+    prevBtn.disabled = currentCarouselIndex === 0;
+    nextBtn.disabled = currentCarouselIndex === mediaList.length - 1;
+
+    const currentMedia = mediaList[currentCarouselIndex];
+
+    // Render main content
+    mainContent.innerHTML = `
+        <div style="position: relative; min-height: 400px; background: #000; display: flex; align-items: center; justify-content: center;">
+            ${currentMedia.type === 'image' ? `
+                <img src="${currentMedia.url}" class="d-block" style="max-height: 500px; max-width: 100%; object-fit: contain; cursor: pointer;" 
+                     alt="${currentMedia.name}" onclick="window.open('${currentMedia.url}', '_blank')">
+            ` : `
+                <video controls class="d-block" style="max-height: 500px; max-width: 100%;">
+                    <source src="${currentMedia.url}" type="video/mp4">
+                </video>
+            `}
+            <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); 
+                        padding: 10px 20px; border-radius: 8px; color: white; max-width: 80%;">
+                <h6 class="mb-1"><i class="fas fa-${currentMedia.type === 'image' ? 'image' : 'video'} me-2"></i>${currentMedia.name}</h6>
+                <p class="mb-0 small"><i class="fas fa-map-marker-alt me-2"></i>${currentMedia.location} | <i class="fas fa-calendar me-2"></i>${currentMedia.date}</p>
+            </div>
+        </div>
+    `;
+
+    // Render thumbnails
+    thumbnailsContainer.innerHTML = mediaList.map((media, index) => `
+        <div style="cursor: pointer; opacity: ${index === currentCarouselIndex ? '1' : '0.4'}; 
+                    transition: all 0.3s; border: ${index === currentCarouselIndex ? '3px solid #667eea' : '2px solid transparent'}; 
+                    border-radius: 8px; overflow: hidden; width: 80px; height: 80px; flex-shrink: 0;"
+             onclick="currentCarouselIndex = ${index}; renderCarouselMedia(getFilteredMedia());">
+            ${media.type === 'image' ? `
+                <img src="${media.url}" style="width: 100%; height: 100%; object-fit: cover;" alt="Thumbnail">
+            ` : `
+                <div style="width: 100%; height: 100%; background: #333; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-video text-white"></i>
+                </div>
+            `}
+        </div>
+    `).join('');
+}
+
+async function filterCarouselMedia() {
+    const location = document.getElementById('carouselLocationFilter').value;
+    const date = document.getElementById('carouselDateFilter').value;
+    const imageCount = document.getElementById('carouselImageCount');
+    const videoCount = document.getElementById('carouselVideoCount');
+
+    const mainContent = document.getElementById('carouselMainContent');
+    mainContent.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 p-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+
+    try {
+        const mediaRef = storage.ref('media');
+        const allMedia = [];
+
+        const folders = await mediaRef.listAll();
+
+        for (const locRef of folders.prefixes) {
+            if (location && locRef.name !== location) continue;
+
+            const dateRefs = await locRef.listAll();
+            for (const dateRef of dateRefs.prefixes) {
+                if (date && dateRef.name !== date) continue;
+
+                const files = await dateRef.listAll();
+                for (const fileRef of files.items) {
+                    const fileName = fileRef.name.toLowerCase();
+                    const isImage = fileName.match(/\.(jpg|jpeg|png|gif|webp)$/);
+                    const isVideo = fileName.match(/\.(mp4|mov|avi|webm)$/);
+
+                    if (isImage || isVideo) {
+                        const url = await fileRef.getDownloadURL();
+                        allMedia.push({
+                            url,
+                            name: fileRef.name,
+                            location: locRef.name,
+                            date: dateRef.name,
+                            type: isImage ? 'image' : 'video'
+                        });
+                    }
+                }
+            }
+        }
+
+        carouselMediaData = allMedia;
+        currentCarouselIndex = 0;
+
+        const images = allMedia.filter(m => m.type === 'image');
+        const videos = allMedia.filter(m => m.type === 'video');
+
+        imageCount.textContent = images.length;
+        videoCount.textContent = videos.length;
+
+        renderCarouselMedia(getFilteredMedia());
+
+    } catch (error) {
+        console.error('Error filtering carousel media:', error);
+        mainContent.innerHTML = `
+            <div class="d-flex align-items-center justify-content-center h-100 p-5">
+                <div class="text-center text-danger">
+                    <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                    <p>Error loading media</p>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Load carousel filters on page load
+document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(() => {
+        loadCarouselFilters();
+    }, 1000);
+});
