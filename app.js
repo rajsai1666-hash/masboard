@@ -1499,12 +1499,16 @@ async function startBulkUpload() {
                 }
             }
 
-            // Refresh views
-            renderLocationFolders();
-            // Refresh dashboard carousel filters and media
-            loadCarouselFilters().then(() => {
+            // Refresh views with forced cache reload
+            loadUnifiedMediaCache(true).then(() => {
+                renderLocationFolders();
+                // Update carousel if visible
                 if (document.getElementById('dashboard').style.display !== 'none') {
-                    filterCarouselMedia();
+                    loadCarouselFilters().then(() => filterCarouselMedia());
+                }
+                // Update Media Gallery if visible
+                if (document.getElementById('media-gallery').style.display !== 'none') {
+                    updateGalleryFromCache();
                 }
             });
         }, 2000);
@@ -12295,81 +12299,17 @@ async function diagnoseFirebaseStorage() {
     }
 }
 
-// Load Media Gallery
+// Load Media Gallery (uses unified cache)
 async function loadMediaGallery() {
     try {
         showMediaMessage('Loading media files...', 'info');
 
-        // Get list of all files from Firebase Storage
-        const mediaRef = storage.ref('media');
-        const result = await mediaRef.listAll();
+        // Use unified cache
+        await loadUnifiedMediaCache();
 
-        const files = [];
-        const locations = new Set();
-        const dates = new Set();
-
-        // Process each subfolder (locations)
-        for (const folderRef of result.prefixes) {
-            const locationName = folderRef.name;
-            locations.add(locationName);
-
-            // Get subfolders (dates) in each location
-            const locationResult = await folderRef.listAll();
-
-            for (const dateRef of locationResult.prefixes) {
-                const dateName = dateRef.name;
-                dates.add(dateName);
-
-                // Get files in each date folder
-                const dateResult = await dateRef.listAll();
-
-                for (const fileRef of dateResult.items) {
-                    try {
-                        // Skip system files and invalid file types
-                        if (fileRef.name.startsWith('.') || fileRef.name.includes('__')) {
-                            continue;
-                        }
-
-                        // Get metadata first to validate file
-                        const metadata = await fileRef.getMetadata();
-
-                        // Skip files without proper content type
-                        if (!metadata.contentType) {
-                            console.warn(`Skipping file with no content type: ${fileRef.fullPath}`);
-                            continue;
-                        }
-
-                        // Get download URL with error handling
-                        let url;
-                        try {
-                            url = await fileRef.getDownloadURL();
-                        } catch (urlError) {
-                            console.error(`Failed to get download URL for ${fileRef.fullPath}:`, urlError);
-                            continue;
-                        }
-
-                        files.push({
-                            name: fileRef.name,
-                            fullPath: fileRef.fullPath,
-                            url: url,
-                            location: locationName,
-                            date: dateName,
-                            size: metadata.size,
-                            timeCreated: metadata.timeCreated,
-                            contentType: metadata.contentType,
-                            ref: fileRef // Store reference for future operations
-                        });
-                    } catch (error) {
-                        console.error(`Error loading file ${fileRef.fullPath}:`, error);
-
-                        // For 404 errors, try to re-upload the file if it exists locally
-                        if (error.code === 'storage/object-not-found') {
-                            console.warn(`File not found in storage: ${fileRef.fullPath}`);
-                        }
-                    }
-                }
-            }
-        }
+        const files = unifiedMediaCache.files;
+        const locations = unifiedMediaCache.locations;
+        const dates = unifiedMediaCache.dates;
 
         mediaFiles = files;
         updateMediaFilters(Array.from(locations), Array.from(dates));
@@ -12702,12 +12642,16 @@ async function startMediaUpload() {
                     modalInstance.hide();
                 }
             }
-            // Refresh media gallery and dashboard
-            renderLocationFolders();
-            // Refresh dashboard carousel filters and media
-            loadCarouselFilters().then(() => {
+            // Refresh unified cache and update all sections
+            loadUnifiedMediaCache(true).then(() => {
+                renderLocationFolders();
+                // Update carousel if visible
                 if (document.getElementById('dashboard') && document.getElementById('dashboard').style.display !== 'none') {
-                    filterCarouselMedia();
+                    loadCarouselFilters().then(() => filterCarouselMedia());
+                }
+                // Update Media Gallery if visible
+                if (document.getElementById('media-gallery') && document.getElementById('media-gallery').style.display !== 'none') {
+                    updateGalleryFromCache();
                 }
             });
         }, 1500);
@@ -12871,43 +12815,30 @@ document.addEventListener('DOMContentLoaded', function () {
     document.head.appendChild(style);
 });
 
-// Media Carousel Functions
+// Media Carousel Functions (uses unified cache)
 async function loadCarouselFilters() {
     try {
-        const mediaRef = storage.ref('media');
-        const result = await mediaRef.listAll();
-
-        const locations = new Set();
-        const dates = new Set();
-
-        for (const folderRef of result.prefixes) {
-            const locationName = folderRef.name;
-            locations.add(locationName);
-
-            const locationResult = await folderRef.listAll();
-            for (const dateRef of locationResult.prefixes) {
-                dates.add(dateRef.name);
-            }
-        }
+        // Use unified cache instead of separate Firebase call
+        await loadUnifiedMediaCache();
 
         const locationFilter = document.getElementById('carouselLocationFilter');
         const dateFilter = document.getElementById('carouselDateFilter');
 
         if (locationFilter) {
             locationFilter.innerHTML = '<option value="">All Locations</option>';
-            Array.from(locations).sort().forEach(loc => {
+            Array.from(unifiedMediaCache.locations).sort().forEach(loc => {
                 locationFilter.innerHTML += `<option value="${loc}">${loc}</option>`;
             });
         }
 
         if (dateFilter) {
             dateFilter.innerHTML = '<option value="">All Dates</option>';
-            Array.from(dates).sort().reverse().forEach(date => {
+            Array.from(unifiedMediaCache.dates).sort().reverse().forEach(date => {
                 dateFilter.innerHTML += `<option value="${date}">${formatDateString(date)}</option>`;
             });
         }
 
-        return { locations, dates }; // Return data for chaining
+        return { locations: unifiedMediaCache.locations, dates: unifiedMediaCache.dates };
     } catch (error) {
         console.error('Error loading carousel filters:', error);
         return { locations: new Set(), dates: new Set() };
@@ -13026,44 +12957,17 @@ async function filterCarouselMedia() {
     mainContent.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 p-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
 
     try {
-        const mediaRef = storage.ref('media');
-        const allMedia = [];
+        // Use unified cache
+        await loadUnifiedMediaCache();
 
-        const folders = await mediaRef.listAll();
-
-        for (const locRef of folders.prefixes) {
-            if (location && locRef.name !== location) continue;
-
-            const dateRefs = await locRef.listAll();
-            for (const dateRef of dateRefs.prefixes) {
-                if (date && dateRef.name !== date) continue;
-
-                const files = await dateRef.listAll();
-                for (const fileRef of files.items) {
-                    const fileName = fileRef.name.toLowerCase();
-                    const isImage = fileName.match(/\.(jpg|jpeg|png|gif|webp)$/);
-                    const isVideo = fileName.match(/\.(mp4|mov|avi|webm)$/);
-
-                    if (isImage || isVideo) {
-                        const url = await fileRef.getDownloadURL();
-                        allMedia.push({
-                            url,
-                            name: fileRef.name,
-                            location: locRef.name,
-                            date: dateRef.name,
-                            type: isImage ? 'image' : 'video'
-                        });
-                    }
-                }
-            }
-        }
-
-        // Sort: Images first, then videos
-        allMedia.sort((a, b) => {
-            if (a.type === 'image' && b.type !== 'image') return -1;
-            if (a.type !== 'image' && b.type === 'image') return 1;
-            return 0;
+        // Filter from cache
+        const allMedia = unifiedMediaCache.files.filter(file => {
+            if (location && file.location !== location) return false;
+            if (date && file.date !== date) return false;
+            return true;
         });
+
+        // Sort: Images first, then videos (already sorted in cache)
 
         carouselMediaData = allMedia;
         currentCarouselIndex = 0;
@@ -13098,66 +13002,42 @@ document.addEventListener('DOMContentLoaded', function () {
     }, 1000);
 });
 
-// Pre-fetch media gallery data in background
-function prefetchMediaGalleryData() {
-    console.log('🚀 Pre-fetching media gallery data in background...');
-    loadGalleryMedia().then(() => {
-        console.log('✅ Media gallery data pre-fetched and cached');
-    }).catch(error => {
-        console.error('❌ Error pre-fetching media:', error);
-    });
-}
-
 // ==========================================
-// MEDIA GALLERY SECTION (NEW - WITH CACHING)
+// UNIFIED MEDIA CACHE FOR ALL SECTIONS
 // ==========================================
-
-// Global cache for media files to avoid repeated Firebase downloads
-let galleryMediaCache = {
+// Global cache shared by Dashboard Carousel, Media Upload, and Media Gallery
+let unifiedMediaCache = {
     files: [],
     locations: new Set(),
     dates: new Set(),
     lastUpdated: null,
-    isLoaded: false
+    isLoaded: false,
+    isLoading: false
 };
 
-// Initialize Media Gallery when section is shown
-document.addEventListener('DOMContentLoaded', function () {
-    const galleryLink = document.querySelector('a[href="#media-gallery"]');
-    if (galleryLink) {
-        galleryLink.addEventListener('click', function (e) {
-            e.preventDefault();
-            // Hide all sections
-            document.querySelectorAll('.dashboard-section, .form-section').forEach(function (sec) {
-                sec.style.display = 'none';
-            });
-            // Show media gallery
-            document.getElementById('media-gallery').style.display = 'block';
-
-            // Load gallery if not already loaded or if cache is old (>5 minutes)
-            const now = Date.now();
-            const cacheAge = galleryMediaCache.lastUpdated ? now - galleryMediaCache.lastUpdated : Infinity;
-            const cacheMaxAge = 5 * 60 * 1000; // 5 minutes
-
-            if (!galleryMediaCache.isLoaded || cacheAge > cacheMaxAge) {
-                loadGalleryMedia();
-            } else {
-                console.log('📦 Using cached media data');
-                displayGalleryMedia(galleryMediaCache.files);
-            }
-        });
+// Unified function to load ALL media from Firebase (used by all 3 sections)
+async function loadUnifiedMediaCache(forceRefresh = false) {
+    // If already loading, wait for it
+    if (unifiedMediaCache.isLoading) {
+        console.log('⏳ Media already loading, waiting...');
+        while (unifiedMediaCache.isLoading) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        return unifiedMediaCache;
     }
-});
 
-// Load Gallery Media from Firebase (with caching)
-async function loadGalleryMedia() {
-    const gridElement = document.getElementById('galleryMediaGrid');
-    gridElement.innerHTML = `
-        <div class="col-12 text-center py-5">
-            <i class="fas fa-spinner fa-spin fa-2x text-primary mb-3"></i>
-            <p class="text-muted">Loading media gallery...</p>
-        </div>
-    `;
+    // Check if cache is still valid
+    const now = Date.now();
+    const cacheAge = unifiedMediaCache.lastUpdated ? now - unifiedMediaCache.lastUpdated : Infinity;
+    const cacheMaxAge = 5 * 60 * 1000; // 5 minutes
+
+    if (!forceRefresh && unifiedMediaCache.isLoaded && cacheAge < cacheMaxAge) {
+        console.log('📦 Using cached media data (age: ' + Math.round(cacheAge / 1000) + 's)');
+        return unifiedMediaCache;
+    }
+
+    console.log('🔄 Loading media from Firebase...');
+    unifiedMediaCache.isLoading = true;
 
     try {
         const mediaRef = storage.ref('media');
@@ -13221,26 +13101,85 @@ async function loadGalleryMedia() {
             }
         }
 
-        // Update cache
-        galleryMediaCache = {
+        // Sort: Images first, then videos
+        files.sort((a, b) => {
+            if (a.type === 'image' && b.type !== 'image') return -1;
+            if (a.type !== 'image' && b.type === 'image') return 1;
+            return 0;
+        });
+
+        // Update unified cache
+        unifiedMediaCache = {
             files: files,
             locations: locations,
             dates: dates,
             lastUpdated: Date.now(),
-            isLoaded: true
+            isLoaded: true,
+            isLoading: false
         };
 
-        console.log(`✅ Loaded ${files.length} media files into cache`);
+        console.log(`✅ Loaded ${files.length} media files into unified cache (${Array.from(locations).length} locations, ${Array.from(dates).length} dates)`);
+        return unifiedMediaCache;
 
-        // Update filters
-        updateGalleryFilters();
+    } catch (error) {
+        console.error('❌ Error loading unified media cache:', error);
+        unifiedMediaCache.isLoading = false;
+        throw error;
+    }
+}
 
-        // Update stats
-        updateGalleryStats(files);
+// Pre-fetch media data in background on page load
+function prefetchMediaGalleryData() {
+    console.log('🚀 Pre-fetching unified media cache in background...');
+    loadUnifiedMediaCache().then(() => {
+        console.log('✅ Unified media cache pre-fetched and ready');
+    }).catch(error => {
+        console.error('❌ Error pre-fetching media:', error);
+    });
+}
 
-        // Display all media
-        displayGalleryMedia(files);
+// ==========================================
+// MEDIA GALLERY SECTION (NEW - WITH CACHING)
+// ==========================================
 
+// Initialize Media Gallery when section is shown
+document.addEventListener('DOMContentLoaded', function () {
+    const galleryLink = document.querySelector('a[href="#media-gallery"]');
+    if (galleryLink) {
+        galleryLink.addEventListener('click', function (e) {
+            e.preventDefault();
+            // Hide all sections
+            document.querySelectorAll('.dashboard-section, .form-section').forEach(function (sec) {
+                sec.style.display = 'none';
+            });
+            // Show media gallery
+            document.getElementById('media-gallery').style.display = 'block';
+
+            // Use unified cache
+            if (unifiedMediaCache.isLoaded) {
+                console.log('📦 Using unified cache for Media Gallery');
+                updateGalleryFromCache();
+            } else {
+                loadGalleryMedia();
+            }
+        });
+    }
+});
+
+// Load Gallery Media from Firebase (uses unified cache)
+async function loadGalleryMedia() {
+    const gridElement = document.getElementById('galleryMediaGrid');
+    gridElement.innerHTML = `
+        <div class="col-12 text-center py-5">
+            <i class="fas fa-spinner fa-spin fa-2x text-primary mb-3"></i>
+            <p class="text-muted">Loading media gallery...</p>
+        </div>
+    `;
+
+    try {
+        // Use unified cache
+        await loadUnifiedMediaCache();
+        updateGalleryFromCache();
     } catch (error) {
         console.error('Error loading media gallery:', error);
         gridElement.innerHTML = `
@@ -13256,10 +13195,18 @@ async function loadGalleryMedia() {
     }
 }
 
+// Update gallery UI from unified cache
+function updateGalleryFromCache() {
+    updateGalleryFilters();
+    updateGalleryStats(unifiedMediaCache.files);
+    displayGalleryMedia(unifiedMediaCache.files);
+}
+
 // Refresh Media Gallery (force reload)
 function refreshMediaGallery() {
-    galleryMediaCache.isLoaded = false;
-    loadGalleryMedia();
+    loadUnifiedMediaCache(true).then(() => {
+        updateGalleryFromCache();
+    });
 }
 
 // Update Gallery Filters
@@ -13269,7 +13216,7 @@ function updateGalleryFilters() {
 
     // Update locations
     locationFilter.innerHTML = '<option value="">All Locations</option>';
-    Array.from(galleryMediaCache.locations).sort().forEach(location => {
+    Array.from(unifiedMediaCache.locations).sort().forEach(location => {
         const option = document.createElement('option');
         option.value = location;
         option.textContent = location;
@@ -13278,7 +13225,7 @@ function updateGalleryFilters() {
 
     // Update dates (most recent first)
     dateFilter.innerHTML = '<option value="">All Dates</option>';
-    Array.from(galleryMediaCache.dates).sort().reverse().forEach(date => {
+    Array.from(unifiedMediaCache.dates).sort().reverse().forEach(date => {
         const option = document.createElement('option');
         option.value = date;
         option.textContent = formatDateString(date);
@@ -13291,7 +13238,7 @@ function updateGalleryStats(files) {
     const totalMedia = files.length;
     const totalImages = files.filter(f => f.type === 'image').length;
     const totalVideos = files.filter(f => f.type === 'video').length;
-    const totalLocations = galleryMediaCache.locations.size;
+    const totalLocations = unifiedMediaCache.locations.size;
 
     document.getElementById('galleryTotalMedia').textContent = totalMedia;
     document.getElementById('galleryTotalImages').textContent = totalImages;
@@ -13380,7 +13327,7 @@ function filterGalleryMedia() {
     const typeFilter = document.getElementById('galleryTypeFilter').value;
     const searchQuery = document.getElementById('gallerySearchInput').value.toLowerCase();
 
-    const filtered = galleryMediaCache.files.filter(file => {
+    const filtered = unifiedMediaCache.files.filter(file => {
         const matchesLocation = !locationFilter || file.location === locationFilter;
         const matchesDate = !dateFilter || file.date === dateFilter;
         const matchesType = !typeFilter || file.type === typeFilter;
@@ -13399,13 +13346,13 @@ function clearGalleryFilters() {
     document.getElementById('galleryDateFilter').value = '';
     document.getElementById('galleryTypeFilter').value = '';
     document.getElementById('gallerySearchInput').value = '';
-    displayGalleryMedia(galleryMediaCache.files);
-    updateGalleryStats(galleryMediaCache.files);
+    displayGalleryMedia(unifiedMediaCache.files);
+    updateGalleryStats(unifiedMediaCache.files);
 }
 
 // Preview Gallery Media (Image or Video)
 function previewGalleryMedia(filePath) {
-    const file = galleryMediaCache.files.find(f => f.fullPath === filePath);
+    const file = unifiedMediaCache.files.find(f => f.fullPath === filePath);
     if (!file) return;
 
     if (file.type === 'image') {
