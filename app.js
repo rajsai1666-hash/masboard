@@ -13047,41 +13047,50 @@ async function loadUnifiedMediaCache(forceRefresh = false) {
         const locations = new Set();
         const dates = new Set();
 
-        // Process each location folder
+        // Collect all file references first (fast)
+        const allFileRefs = [];
+
         for (const folderRef of result.prefixes) {
             const locationName = folderRef.name;
             locations.add(locationName);
-
             const locationResult = await folderRef.listAll();
 
-            // Process each date folder
             for (const dateRef of locationResult.prefixes) {
                 const dateName = dateRef.name;
                 dates.add(dateName);
-
                 const dateResult = await dateRef.listAll();
 
-                // Process each file
                 for (const fileRef of dateResult.items) {
+                    if (!fileRef.name.startsWith('.') && !fileRef.name.includes('__')) {
+                        allFileRefs.push({ fileRef, locationName, dateName });
+                    }
+                }
+            }
+        }
+
+        console.log(`📁 Found ${allFileRefs.length} files, loading in parallel batches...`);
+
+        // Process files in parallel batches (30 at a time for speed)
+        const BATCH_SIZE = 30;
+        for (let i = 0; i < allFileRefs.length; i += BATCH_SIZE) {
+            const batch = allFileRefs.slice(i, i + BATCH_SIZE);
+
+            const batchResults = await Promise.allSettled(
+                batch.map(async ({ fileRef, locationName, dateName }) => {
                     try {
-                        // Skip system files
-                        if (fileRef.name.startsWith('.') || fileRef.name.includes('__')) {
-                            continue;
-                        }
+                        // Get metadata and URL in parallel
+                        const [metadata, url] = await Promise.all([
+                            fileRef.getMetadata(),
+                            fileRef.getDownloadURL()
+                        ]);
 
-                        // Get metadata
-                        const metadata = await fileRef.getMetadata();
-                        if (!metadata.contentType) continue;
+                        if (!metadata.contentType) return null;
 
-                        // Get download URL
-                        const url = await fileRef.getDownloadURL();
-
-                        // Determine file type
                         const isImage = metadata.contentType.startsWith('image/');
                         const isVideo = metadata.contentType.startsWith('video/');
 
                         if (isImage || isVideo) {
-                            files.push({
+                            return {
                                 name: fileRef.name,
                                 fullPath: fileRef.fullPath,
                                 url: url,
@@ -13092,13 +13101,25 @@ async function loadUnifiedMediaCache(forceRefresh = false) {
                                 contentType: metadata.contentType,
                                 type: isImage ? 'image' : 'video',
                                 ref: fileRef
-                            });
+                            };
                         }
+                        return null;
                     } catch (error) {
-                        console.error(`Error loading file ${fileRef.fullPath}:`, error);
+                        console.error(`Error loading ${fileRef.fullPath}:`, error);
+                        return null;
                     }
+                })
+            );
+
+            // Collect successful results
+            batchResults.forEach(result => {
+                if (result.status === 'fulfilled' && result.value) {
+                    files.push(result.value);
                 }
-            }
+            });
+
+            // Log progress
+            console.log(`⏳ Loaded ${Math.min(i + BATCH_SIZE, allFileRefs.length)}/${allFileRefs.length} files...`);
         }
 
         // Sort: Images first, then videos
