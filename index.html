@@ -19,6 +19,7 @@
     script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://www.gstatic.com https://*.firebaseio.com;
     style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
     img-src 'self' data: https: https://www.darlingafrica.com https://upload.wikimedia.org https://avatars.githubusercontent.com https://firebasestorage.googleapis.com https://*.firebasestorage.app;
+    media-src 'self' https://firebasestorage.googleapis.com https://*.firebasestorage.app blob: data:;
     font-src 'self' https://cdnjs.cloudflare.com;
     frame-src https://*.firebaseio.com;
     object-src 'none';
@@ -654,13 +655,13 @@
             backdrop-filter: blur(4px);
         }
 
-        #media-section .stat-card {
+        #media-upload .stat-card {
             border: none;
             border-radius: 12px;
             transition: all 0.3s ease;
         }
 
-        #media-section .stat-card:hover {
+        #media-upload .stat-card:hover {
             transform: translateY(-3px);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
         }
@@ -946,32 +947,32 @@
             }
 
             /* Mobile stat cards */
-            #media-section .stat-card .card-body {
+            #media-upload .stat-card .card-body {
                 padding: 8px !important;
             }
 
-            #media-section .stat-card h6 {
+            #media-upload .stat-card h6 {
                 font-size: 1.1rem !important;
                 margin-bottom: 2px !important;
             }
 
-            #media-section .stat-card small {
+            #media-upload .stat-card small {
                 font-size: 0.65rem !important;
             }
 
-            #media-section .stat-card i {
+            #media-upload .stat-card i {
                 font-size: 1.2rem !important;
             }
 
             /* Mobile filter controls */
-            #media-section .form-select-sm,
-            #media-section .form-control-sm {
+            #media-upload .form-select-sm,
+            #media-upload .form-control-sm {
                 font-size: 0.75rem !important;
                 padding: 4px 8px !important;
             }
 
             /* Mobile section title */
-            #media-section .section-title {
+            #media-upload .section-title {
                 font-size: 1.3rem !important;
             }
 
@@ -1421,11 +1422,6 @@
                             <i class="fas fa-tachometer-alt"></i> Dashboard
                         </a>
                     </li>
-                    <!-- <li class="nav-item">
-                        <a class="nav-link" href="#media-section">
-                            <i class="fas fa-images"></i> Media Gallery
-                        </a>
-                    </li> -->
                     <li class="nav-item">
                         <a class="nav-link" href="#register-stylist">
                             <i class="fas fa-user-plus"></i> Register Stylist
@@ -1478,7 +1474,13 @@
                     </li>
 
                     <li class="nav-item">
-                        <a class="nav-link" href="#media-section">
+                        <a class="nav-link" href="#media-upload">
+                            <i class="fas fa-images"></i> Media upload
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="#media-gallery">
                             <i class="fas fa-images"></i> Media Gallery
                         </a>
                     </li>
@@ -1696,7 +1698,7 @@
                 </div>
 
                 <!-- Image/Video Upload & View Section -->
-                <div id="media-section" class="dashboard-section" style="display: none;">
+                <div id="media-upload" class="dashboard-section" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h2 class="section-title mb-0">Location Media Gallery</h2>
                         <div class="btn-group">
@@ -1730,6 +1732,109 @@
                     <div class="mt-4">
                         <div id="mediaGallery" style="min-height:150px;">
                             <div class="text-muted">Select a location folder to view its media.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Media Gallery Section (New) -->
+                <div id="media-gallery" class="dashboard-section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2 class="section-title">
+                            <i class="fas fa-images me-2 text-primary"></i>Media Gallery
+                        </h2>
+                        <button class="btn btn-outline-primary" onclick="refreshMediaGallery()">
+                            <i class="fas fa-sync-alt me-2"></i>Refresh
+                        </button>
+                    </div>
+
+                    <!-- Statistics Cards -->
+                    <div class="row g-2 g-md-3 mb-3 mb-md-4">
+                        <div class="col-6 col-lg-3">
+                            <div class="card stat-card text-center border-0 shadow-sm h-100">
+                                <div class="card-body p-2 p-md-3">
+                                    <i class="fas fa-photo-video fa-lg fa-md-2x text-primary mb-1 mb-md-2"></i>
+                                    <h6 class="text-primary fw-bold mb-1 fs-6 fs-md-5" id="galleryTotalMedia">0</h6>
+                                    <small class="text-muted d-block" style="font-size: 0.7rem;">Total Media</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="card stat-card text-center border-0 shadow-sm h-100">
+                                <div class="card-body p-2 p-md-3">
+                                    <i class="fas fa-image fa-lg fa-md-2x text-success mb-1 mb-md-2"></i>
+                                    <h6 class="text-success fw-bold mb-1 fs-6 fs-md-5" id="galleryTotalImages">0</h6>
+                                    <small class="text-muted d-block" style="font-size: 0.7rem;">Images</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="card stat-card text-center border-0 shadow-sm h-100">
+                                <div class="card-body p-2 p-md-3">
+                                    <i class="fas fa-video fa-lg fa-md-2x text-info mb-1 mb-md-2"></i>
+                                    <h6 class="text-info fw-bold mb-1 fs-6 fs-md-5" id="galleryTotalVideos">0</h6>
+                                    <small class="text-muted d-block" style="font-size: 0.7rem;">Videos</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="card stat-card text-center border-0 shadow-sm h-100">
+                                <div class="card-body p-2 p-md-3">
+                                    <i class="fas fa-map-marker-alt fa-lg fa-md-2x text-warning mb-1 mb-md-2"></i>
+                                    <h6 class="text-warning fw-bold mb-1 fs-6 fs-md-5" id="galleryTotalLocations">0</h6>
+                                    <small class="text-muted d-block" style="font-size: 0.7rem;">Locations</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="card mb-3 mb-md-4">
+                        <div class="card-body p-2 p-md-3">
+                            <div class="row g-2 g-md-3 align-items-end">
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label small">Location</label>
+                                    <select class="form-select form-select-sm" id="galleryLocationFilter"
+                                        onchange="filterGalleryMedia()">
+                                        <option value="">All Locations</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label small">Date</label>
+                                    <select class="form-select form-select-sm" id="galleryDateFilter"
+                                        onchange="filterGalleryMedia()">
+                                        <option value="">All Dates</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label small">Type</label>
+                                    <select class="form-select form-select-sm" id="galleryTypeFilter"
+                                        onchange="filterGalleryMedia()">
+                                        <option value="">All Types</option>
+                                        <option value="image">Images</option>
+                                        <option value="video">Videos</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label small">Search</label>
+                                    <input type="text" class="form-control form-control-sm" id="gallerySearchInput"
+                                        placeholder="Search filename..." oninput="filterGalleryMedia()">
+                                </div>
+                                <div class="col-12 col-md-2">
+                                    <button class="btn btn-outline-secondary btn-sm w-100"
+                                        onclick="clearGalleryFilters()" title="Clear Filters">
+                                        <i class="fas fa-times"></i><span class="d-none d-md-inline ms-1">Clear</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Media Grid (4-5 columns) -->
+                    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-2 g-md-3"
+                        id="galleryMediaGrid">
+                        <div class="col-12 text-center py-4 py-md-5">
+                            <i class="fas fa-spinner fa-spin fa-lg fa-md-2x text-muted mb-2 mb-md-3"></i>
+                            <p class="text-muted small">Loading media gallery...</p>
                         </div>
                     </div>
                 </div>
@@ -3193,11 +3298,17 @@
                                                         for="access_settings">Settings</label>
                                                 </div>
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox"
-                                                        value="media-section" id="access_media_section"
-                                                        name="accessFields">
+                                                    <input class="form-check-input" type="checkbox" value="media-upload"
+                                                        id="access_media_section" name="accessFields">
                                                     <label class="form-check-label" for="access_media_section">Media
-                                                        Section</label>
+                                                        Upload</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox"
+                                                        value="media-gallery" id="access_media_gallery"
+                                                        name="accessFields">
+                                                    <label class="form-check-label" for="access_media_gallery">Media
+                                                        Gallery</label>
                                                 </div>
                                             </div>
                                         </div>
@@ -3310,10 +3421,10 @@
                 </div>
 
                 <!-- Media Gallery Section -->
-                <div id="media-section" class="dashboard-section" style="display: none;">
+                <div id="media-upload" class="dashboard-section" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2 class="section-title">
-                            <i class="fas fa-images me-2 text-primary"></i>Media Gallery
+                            <i class="fas fa-images me-2 text-primary"></i>Media upload
                         </h2>
                         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadMediaModal">
                             <i class="fas fa-cloud-upload-alt me-2"></i>Upload Media
@@ -3673,6 +3784,46 @@
         </div>
     </div>
 
+    <!-- Video Preview Modal -->
+    <div class="modal fade" id="videoPreviewModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="videoPreviewTitle">Video Preview</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center p-0 bg-dark">
+                    <video id="previewVideo" class="w-100" style="max-height: 70vh;" controls controlsList="nodownload"
+                        preload="metadata">
+                        <source id="videoSource" src="" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                    <div id="videoDetails" class="p-3 bg-white">
+                        <div class="row text-start">
+                            <div class="col-md-6">
+                                <strong>Filename:</strong> <span id="videoFilename"></span><br>
+                                <strong>Location:</strong> <span id="videoLocation"></span><br>
+                                <strong>Date:</strong> <span id="videoDate"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Size:</strong> <span id="videoSize"></span><br>
+                                <strong>URL:</strong> <a href="#" id="videoURL" target="_blank" class="text-break">View
+                                    Original</a><br>
+                                <strong>Uploaded:</strong> <span id="videoUploadTime"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" id="deleteVideoBtn">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -3842,4 +3993,3 @@
 </body>
 
 </html>
-
