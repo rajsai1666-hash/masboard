@@ -1365,16 +1365,29 @@ async function startBulkUpload() {
                 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
                 const dateRegex2 = /^\d{2}-\d{2}-\d{4}$/;
 
-                if (dateRegex.test(rootFolderName) || dateRegex2.test(rootFolderName)) {
+                // Check if user selected a location in organize by location mode
+                if (organizeBy === 'location') {
+                    location = document.getElementById('bulkLocation').value;
+                    // If root folder is a date, use it; otherwise use today
+                    if (dateRegex.test(rootFolderName) || dateRegex2.test(rootFolderName)) {
+                        date = rootFolderName;
+                    } else {
+                        date = pathParts[1] && (dateRegex.test(pathParts[1]) || dateRegex2.test(pathParts[1])) ? pathParts[1] : today;
+                    }
+                    filePath = `media/${location}/${date}/${fileName}`;
+                } else if (dateRegex.test(rootFolderName) || dateRegex2.test(rootFolderName)) {
+                    // Root folder is a date folder
                     filePath = `media/${rootFolderName}/${fileName}`;
                     location = 'ROOT';
                     date = rootFolderName;
                 } else if (pathParts.length > 1) {
+                    // Location folder with substructure - preserve complete path
                     let subPath = pathParts.slice(1).join('/');
                     filePath = `media/${rootFolderName}/${subPath}`;
                     location = rootFolderName;
                     date = pathParts[1] || today;
                 } else {
+                    // Simple location folder
                     filePath = `media/${rootFolderName}/${today}/${fileName}`;
                     location = rootFolderName;
                     date = today;
@@ -1486,8 +1499,14 @@ async function startBulkUpload() {
                 }
             }
 
-            // Refresh view
+            // Refresh views
             renderLocationFolders();
+            // Refresh dashboard carousel filters and media
+            loadCarouselFilters().then(() => {
+                if (document.getElementById('dashboard').style.display !== 'none') {
+                    filterCarouselMedia();
+                }
+            });
         }, 2000);
 
     } catch (error) {
@@ -1931,7 +1950,7 @@ const MASTER_LOGIN = {
 
 // Section permissions based on roles
 const SECTION_PERMISSIONS = {
-    [ACCESS_LEVELS.ADMIN]: ['dashboard', 'register-stylist', 'braiding-form', 'stylists', 'sale-order-form', 'sale-order-report', 'stylist-report', 'customers', 'payment-request', 'payments', 'reports', 'user-management', 'settings', 'media-section'],
+    [ACCESS_LEVELS.ADMIN]: ['dashboard', 'register-stylist', 'braiding-form', 'stylists', 'sale-order-form', 'sale-order-report', 'stylist-report', 'customers', 'payment-request', 'payments', 'reports', 'user-management', 'settings', 'media-upload', 'media-gallery'],
     [ACCESS_LEVELS.MANAGER]: ['dashboard', 'stylists', 'customers', 'payments', 'reports'],
     [ACCESS_LEVELS.USER]: ['dashboard', 'stylists', 'customers'],
     [ACCESS_LEVELS.VIEWER]: ['dashboard', 'reports']
@@ -2940,8 +2959,12 @@ function showEditUserModal(userId, user) {
                                                         <label class="form-check-label" for="edit_access_settings">Settings</label>
                                                     </div>
                                                     <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" value="media-section" id="edit_access_media_section" name="editAccessFields">
-                                                        <label class="form-check-label" for="edit_access_media_section">Media Section</label>
+                                                        <input class="form-check-input" type="checkbox" value="media-upload" id="edit_access_media_upload" name="editAccessFields">
+                                                        <label class="form-check-label" for="edit_access_media_upload">Media Upload</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="media-gallery" id="edit_access_media_gallery" name="editAccessFields">
+                                                        <label class="form-check-label" for="edit_access_media_gallery">Media Gallery</label>
                                                     </div>
                                                 </div>
                                             </div>
@@ -3359,6 +3382,11 @@ function initializeDashboard() {
 
     // Show dashboard immediately with loading placeholders
     showDashboardPlaceholders();
+
+    // Load dashboard carousel media automatically
+    setTimeout(() => {
+        filterCarouselMedia();
+    }, 500);
 
     // Load dashboard stats in background (non-blocking)
     setTimeout(() => {
@@ -12205,10 +12233,10 @@ document.addEventListener('click', function (e) {
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.nav-link').forEach(function (link) {
         link.addEventListener('click', function (e) {
-            if (this.getAttribute('href') === '#media-section') {
+            if (this.getAttribute('href') === '#media-upload') {
                 e.preventDefault();
                 document.querySelectorAll('.dashboard-section').forEach(function (sec) { sec.style.display = 'none'; });
-                document.getElementById('media-section').style.display = 'block';
+                document.getElementById('media-upload').style.display = 'block';
                 // Load media when section is shown
                 loadMediaGallery();
             }
@@ -12409,6 +12437,13 @@ function displayMediaFiles(files) {
         `;
         return;
     }
+
+    // Sort: Images first, then videos
+    files.sort((a, b) => {
+        if (a.contentType.startsWith('image/') && !b.contentType.startsWith('image/')) return -1;
+        if (!a.contentType.startsWith('image/') && b.contentType.startsWith('image/')) return 1;
+        return 0;
+    });
 
     mediaGrid.innerHTML = files.map(file => {
         const isImage = file.contentType && file.contentType.startsWith('image/');
@@ -12667,8 +12702,14 @@ async function startMediaUpload() {
                     modalInstance.hide();
                 }
             }
-            // Refresh media gallery
+            // Refresh media gallery and dashboard
             renderLocationFolders();
+            // Refresh dashboard carousel filters and media
+            loadCarouselFilters().then(() => {
+                if (document.getElementById('dashboard') && document.getElementById('dashboard').style.display !== 'none') {
+                    filterCarouselMedia();
+                }
+            });
         }, 1500);
 
     } catch (error) {
@@ -12753,19 +12794,39 @@ function formatFileSize(bytes) {
 function formatDateString(dateStr) {
     if (!dateStr) return 'Unknown';
 
-    // Handle DD-MM-YYYY format
-    if (dateStr.includes('-')) {
+    // Handle various date formats
+    let date;
+
+    // Check for DD-MM-YYYY format (31-12-2025)
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
         const parts = dateStr.split('-');
-        if (parts.length === 3) {
-            const day = parts[0];
-            const month = parts[1];
-            const year = parts[2];
-            const date = new Date(`${year}-${month}-${day}`);
-            return date.toLocaleDateString();
-        }
+        date = new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+    // Check for YYYY-MM-DD format (2025-12-31)
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        date = new Date(dateStr);
+    }
+    // Check for DD.MM.YYYY format
+    else if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateStr)) {
+        const parts = dateStr.split('.');
+        date = new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+    // Check for YYYY.MM.DD format
+    else if (/^\d{4}\.\d{2}\.\d{2}$/.test(dateStr)) {
+        const parts = dateStr.split('.');
+        date = new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+    else {
+        return dateStr; // Return as-is if format not recognized
     }
 
-    return dateStr;
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+        return dateStr;
+    }
+
+    // Return formatted date
+    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function showMediaMessage(message, type = 'info') {
@@ -12842,11 +12903,14 @@ async function loadCarouselFilters() {
         if (dateFilter) {
             dateFilter.innerHTML = '<option value="">All Dates</option>';
             Array.from(dates).sort().reverse().forEach(date => {
-                dateFilter.innerHTML += `<option value="${date}">${date}</option>`;
+                dateFilter.innerHTML += `<option value="${date}">${formatDateString(date)}</option>`;
             });
         }
+
+        return { locations, dates }; // Return data for chaining
     } catch (error) {
         console.error('Error loading carousel filters:', error);
+        return { locations: new Set(), dates: new Set() };
     }
 }
 
@@ -12920,18 +12984,21 @@ function renderCarouselMedia(mediaList) {
                 <img src="${currentMedia.url}" class="d-block" style="max-height: 500px; max-width: 100%; object-fit: contain; cursor: pointer;" 
                      alt="${currentMedia.name}" onclick="window.open('${currentMedia.url}', '_blank')">
             ` : `
-                <video controls class="d-block" style="max-height: 500px; max-width: 100%;">
+                <video controls controlsList="nodownload" preload="metadata" class="d-block" 
+                       style="max-height: 500px; max-width: 100%; outline: none;">
                     <source src="${currentMedia.url}" type="video/mp4">
+                    <source src="${currentMedia.url}" type="video/webm">
+                    Your browser does not support the video tag.
                 </video>
             `}
             <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); 
-                        padding: 10px 20px; border-radius: 8px; color: white; max-width: 80%;">
-                <p class="mb-0 small"><i class="fas fa-map-marker-alt me-2"></i>${currentMedia.location} | <i class="fas fa-calendar me-2"></i>${currentMedia.date}</p>
+                        padding: 10px 20px; border-radius: 8px; color: white; max-width: 80%; pointer-events: none;">
+                
+                <p class="mb-0 small"><i class="fas fa-map-marker-alt me-2"></i>${currentMedia.location} | <i class="fas fa-calendar me-2"></i>${formatDateString(currentMedia.date)}</p>
             </div>
         </div>
     `;
-
-     //<h6 class="mb-1"><i class="fas fa-${currentMedia.type === 'image' ? 'image' : 'video'} me-2"></i>${currentMedia.name}</h6>
+    //<h6 class="mb-1"><i class="fas fa-${currentMedia.type === 'image' ? 'image' : 'video'} me-2"></i>${currentMedia.name}</h6>
     // Render thumbnails
     thumbnailsContainer.innerHTML = mediaList.map((media, index) => `
         <div style="cursor: pointer; opacity: ${index === currentCarouselIndex ? '1' : '0.4'}; 
@@ -12991,6 +13058,13 @@ async function filterCarouselMedia() {
             }
         }
 
+        // Sort: Images first, then videos
+        allMedia.sort((a, b) => {
+            if (a.type === 'image' && b.type !== 'image') return -1;
+            if (a.type !== 'image' && b.type === 'image') return 1;
+            return 0;
+        });
+
         carouselMediaData = allMedia;
         currentCarouselIndex = 0;
 
@@ -13019,6 +13093,380 @@ async function filterCarouselMedia() {
 document.addEventListener('DOMContentLoaded', function () {
     setTimeout(() => {
         loadCarouselFilters();
+        // Pre-fetch media gallery data in background for faster loading
+        prefetchMediaGalleryData();
     }, 1000);
 });
 
+// Pre-fetch media gallery data in background
+function prefetchMediaGalleryData() {
+    console.log('🚀 Pre-fetching media gallery data in background...');
+    loadGalleryMedia().then(() => {
+        console.log('✅ Media gallery data pre-fetched and cached');
+    }).catch(error => {
+        console.error('❌ Error pre-fetching media:', error);
+    });
+}
+
+// ==========================================
+// MEDIA GALLERY SECTION (NEW - WITH CACHING)
+// ==========================================
+
+// Global cache for media files to avoid repeated Firebase downloads
+let galleryMediaCache = {
+    files: [],
+    locations: new Set(),
+    dates: new Set(),
+    lastUpdated: null,
+    isLoaded: false
+};
+
+// Initialize Media Gallery when section is shown
+document.addEventListener('DOMContentLoaded', function () {
+    const galleryLink = document.querySelector('a[href="#media-gallery"]');
+    if (galleryLink) {
+        galleryLink.addEventListener('click', function (e) {
+            e.preventDefault();
+            // Hide all sections
+            document.querySelectorAll('.dashboard-section, .form-section').forEach(function (sec) {
+                sec.style.display = 'none';
+            });
+            // Show media gallery
+            document.getElementById('media-gallery').style.display = 'block';
+
+            // Load gallery if not already loaded or if cache is old (>5 minutes)
+            const now = Date.now();
+            const cacheAge = galleryMediaCache.lastUpdated ? now - galleryMediaCache.lastUpdated : Infinity;
+            const cacheMaxAge = 5 * 60 * 1000; // 5 minutes
+
+            if (!galleryMediaCache.isLoaded || cacheAge > cacheMaxAge) {
+                loadGalleryMedia();
+            } else {
+                console.log('📦 Using cached media data');
+                displayGalleryMedia(galleryMediaCache.files);
+            }
+        });
+    }
+});
+
+// Load Gallery Media from Firebase (with caching)
+async function loadGalleryMedia() {
+    const gridElement = document.getElementById('galleryMediaGrid');
+    gridElement.innerHTML = `
+        <div class="col-12 text-center py-5">
+            <i class="fas fa-spinner fa-spin fa-2x text-primary mb-3"></i>
+            <p class="text-muted">Loading media gallery...</p>
+        </div>
+    `;
+
+    try {
+        const mediaRef = storage.ref('media');
+        const result = await mediaRef.listAll();
+
+        const files = [];
+        const locations = new Set();
+        const dates = new Set();
+
+        // Process each location folder
+        for (const folderRef of result.prefixes) {
+            const locationName = folderRef.name;
+            locations.add(locationName);
+
+            const locationResult = await folderRef.listAll();
+
+            // Process each date folder
+            for (const dateRef of locationResult.prefixes) {
+                const dateName = dateRef.name;
+                dates.add(dateName);
+
+                const dateResult = await dateRef.listAll();
+
+                // Process each file
+                for (const fileRef of dateResult.items) {
+                    try {
+                        // Skip system files
+                        if (fileRef.name.startsWith('.') || fileRef.name.includes('__')) {
+                            continue;
+                        }
+
+                        // Get metadata
+                        const metadata = await fileRef.getMetadata();
+                        if (!metadata.contentType) continue;
+
+                        // Get download URL
+                        const url = await fileRef.getDownloadURL();
+
+                        // Determine file type
+                        const isImage = metadata.contentType.startsWith('image/');
+                        const isVideo = metadata.contentType.startsWith('video/');
+
+                        if (isImage || isVideo) {
+                            files.push({
+                                name: fileRef.name,
+                                fullPath: fileRef.fullPath,
+                                url: url,
+                                location: locationName,
+                                date: dateName,
+                                size: metadata.size,
+                                timeCreated: metadata.timeCreated,
+                                contentType: metadata.contentType,
+                                type: isImage ? 'image' : 'video',
+                                ref: fileRef
+                            });
+                        }
+                    } catch (error) {
+                        console.error(`Error loading file ${fileRef.fullPath}:`, error);
+                    }
+                }
+            }
+        }
+
+        // Update cache
+        galleryMediaCache = {
+            files: files,
+            locations: locations,
+            dates: dates,
+            lastUpdated: Date.now(),
+            isLoaded: true
+        };
+
+        console.log(`✅ Loaded ${files.length} media files into cache`);
+
+        // Update filters
+        updateGalleryFilters();
+
+        // Update stats
+        updateGalleryStats(files);
+
+        // Display all media
+        displayGalleryMedia(files);
+
+    } catch (error) {
+        console.error('Error loading media gallery:', error);
+        gridElement.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                <h5 class="text-danger">Error Loading Media</h5>
+                <p class="text-muted">Please refresh the page and try again.</p>
+                <button class="btn btn-primary" onclick="refreshMediaGallery()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Refresh Media Gallery (force reload)
+function refreshMediaGallery() {
+    galleryMediaCache.isLoaded = false;
+    loadGalleryMedia();
+}
+
+// Update Gallery Filters
+function updateGalleryFilters() {
+    const locationFilter = document.getElementById('galleryLocationFilter');
+    const dateFilter = document.getElementById('galleryDateFilter');
+
+    // Update locations
+    locationFilter.innerHTML = '<option value="">All Locations</option>';
+    Array.from(galleryMediaCache.locations).sort().forEach(location => {
+        const option = document.createElement('option');
+        option.value = location;
+        option.textContent = location;
+        locationFilter.appendChild(option);
+    });
+
+    // Update dates (most recent first)
+    dateFilter.innerHTML = '<option value="">All Dates</option>';
+    Array.from(galleryMediaCache.dates).sort().reverse().forEach(date => {
+        const option = document.createElement('option');
+        option.value = date;
+        option.textContent = formatDateString(date);
+        dateFilter.appendChild(option);
+    });
+}
+
+// Update Gallery Statistics
+function updateGalleryStats(files) {
+    const totalMedia = files.length;
+    const totalImages = files.filter(f => f.type === 'image').length;
+    const totalVideos = files.filter(f => f.type === 'video').length;
+    const totalLocations = galleryMediaCache.locations.size;
+
+    document.getElementById('galleryTotalMedia').textContent = totalMedia;
+    document.getElementById('galleryTotalImages').textContent = totalImages;
+    document.getElementById('galleryTotalVideos').textContent = totalVideos;
+    document.getElementById('galleryTotalLocations').textContent = totalLocations;
+}
+
+// Display Gallery Media in 4-5 column grid
+function displayGalleryMedia(files) {
+    const gridElement = document.getElementById('galleryMediaGrid');
+
+    if (files.length === 0) {
+        gridElement.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No Media Found</h5>
+                <p class="text-muted">Try adjusting your filters or upload some media files.</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Sort: Images first, then videos
+    files.sort((a, b) => {
+        if (a.type === 'image' && b.type !== 'image') return -1;
+        if (a.type !== 'image' && b.type === 'image') return 1;
+        return 0;
+    });
+
+    gridElement.innerHTML = files.map(file => {
+        const isImage = file.type === 'image';
+        const isVideo = file.type === 'video';
+
+        return `
+            <div>
+                <div class="card h-100 border-0 shadow-sm media-card" onclick="previewGalleryMedia('${file.fullPath}')">
+                    <div class="position-relative">
+                        ${isImage ? `
+                            <img src="${file.url}" class="card-img-top" style="height: 180px; object-fit: cover;" 
+                                 alt="${file.name}" loading="lazy"
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                            <div class="d-none align-items-center justify-content-center bg-light position-absolute w-100" 
+                                 style="height: 180px; top: 0;">
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-image fa-2x mb-1"></i>
+                                    <small class="d-block">Failed to load</small>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="d-flex align-items-center justify-content-center bg-dark" style="height: 180px;">
+                                <i class="fas fa-play-circle fa-3x text-white opacity-75"></i>
+                            </div>
+                        `}
+                        <div class="position-absolute top-0 end-0 m-2">
+                            <span class="badge ${isImage ? 'bg-success' : 'bg-info'}">
+                                <i class="fas fa-${isImage ? 'image' : 'video'} me-1"></i>${isImage ? 'Image' : 'Video'}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body p-2">
+                        <h6 class="card-title text-truncate mb-1" style="font-size: 0.85rem;" title="${file.name}">
+                            ${file.name}
+                        </h6>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted" style="font-size: 0.7rem;">
+                                <i class="fas fa-map-marker-alt me-1"></i>${file.location}
+                            </small>
+                            <small class="text-muted" style="font-size: 0.7rem;">
+                                <i class="fas fa-hdd me-1"></i>${formatFileSize(file.size)}
+                            </small>
+                        </div>
+                        <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">
+                            <i class="fas fa-calendar me-1"></i>${formatDateString(file.date)}
+                        </small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Filter Gallery Media
+function filterGalleryMedia() {
+    const locationFilter = document.getElementById('galleryLocationFilter').value;
+    const dateFilter = document.getElementById('galleryDateFilter').value;
+    const typeFilter = document.getElementById('galleryTypeFilter').value;
+    const searchQuery = document.getElementById('gallerySearchInput').value.toLowerCase();
+
+    const filtered = galleryMediaCache.files.filter(file => {
+        const matchesLocation = !locationFilter || file.location === locationFilter;
+        const matchesDate = !dateFilter || file.date === dateFilter;
+        const matchesType = !typeFilter || file.type === typeFilter;
+        const matchesSearch = !searchQuery || file.name.toLowerCase().includes(searchQuery);
+
+        return matchesLocation && matchesDate && matchesType && matchesSearch;
+    });
+
+    displayGalleryMedia(filtered);
+    updateGalleryStats(filtered);
+}
+
+// Clear Gallery Filters
+function clearGalleryFilters() {
+    document.getElementById('galleryLocationFilter').value = '';
+    document.getElementById('galleryDateFilter').value = '';
+    document.getElementById('galleryTypeFilter').value = '';
+    document.getElementById('gallerySearchInput').value = '';
+    displayGalleryMedia(galleryMediaCache.files);
+    updateGalleryStats(galleryMediaCache.files);
+}
+
+// Preview Gallery Media (Image or Video)
+function previewGalleryMedia(filePath) {
+    const file = galleryMediaCache.files.find(f => f.fullPath === filePath);
+    if (!file) return;
+
+    if (file.type === 'image') {
+        // Show image preview modal
+        const modal = new bootstrap.Modal(document.getElementById('imagePreviewModal'));
+        document.getElementById('imagePreviewTitle').textContent = file.name;
+        document.getElementById('previewImage').src = file.url;
+        document.getElementById('imageFilename').textContent = file.name;
+        document.getElementById('imageLocation').textContent = file.location;
+        document.getElementById('imageDate').textContent = formatDateString(file.date);
+        document.getElementById('imageSize').textContent = formatFileSize(file.size);
+        document.getElementById('imageURL').href = file.url;
+        document.getElementById('imageUploadTime').textContent = new Date(file.timeCreated).toLocaleString();
+        document.getElementById('deleteImageBtn').setAttribute('data-file-path', filePath);
+        modal.show();
+    } else if (file.type === 'video') {
+        // Show video preview modal
+        const modal = new bootstrap.Modal(document.getElementById('videoPreviewModal'));
+        document.getElementById('videoPreviewTitle').textContent = file.name;
+        document.getElementById('videoSource').src = file.url;
+        document.getElementById('previewVideo').load(); // Reload video
+        document.getElementById('videoFilename').textContent = file.name;
+        document.getElementById('videoLocation').textContent = file.location;
+        document.getElementById('videoDate').textContent = formatDateString(file.date);
+        document.getElementById('videoSize').textContent = formatFileSize(file.size);
+        document.getElementById('videoURL').href = file.url;
+        document.getElementById('videoUploadTime').textContent = new Date(file.timeCreated).toLocaleString();
+        document.getElementById('deleteVideoBtn').setAttribute('data-file-path', filePath);
+        modal.show();
+    }
+}
+
+// Delete media from gallery
+document.addEventListener('DOMContentLoaded', function () {
+    // Handle video delete button
+    const deleteVideoBtn = document.getElementById('deleteVideoBtn');
+    if (deleteVideoBtn) {
+        deleteVideoBtn.addEventListener('click', async function () {
+            const filePath = this.getAttribute('data-file-path');
+            if (!filePath) return;
+
+            if (!confirm('Are you sure you want to delete this video? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const fileRef = storage.ref(filePath);
+                await fileRef.delete();
+                showAlert('Video deleted successfully', 'success');
+
+                // Close modal
+                bootstrap.Modal.getInstance(document.getElementById('videoPreviewModal')).hide();
+
+                // Refresh gallery
+                setTimeout(() => {
+                    refreshMediaGallery();
+                }, 500);
+            } catch (error) {
+                console.error('Error deleting video:', error);
+                showAlert('Error deleting video. Please try again.', 'danger');
+            }
+        });
+    }
+});
