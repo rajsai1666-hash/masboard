@@ -1017,6 +1017,7 @@ function showBulkUploadModal() {
                                             <option value="AKURE">📍 AKURE</option>
                                             <option value="IBADAN">📍 IBADAN</option>
                                             <option value="IBADAN-MOKOLA">📍 IBADAN-MOKOLA</option>
+                                            <option value="IBADAN-ORITA">📍 IBADAN-ORITA</option>
                                             <option value="ADO-EKITI">📍 ADO-EKITI</option>
                                             <option value="ILORIN">📍 ILORIN</option>
                                             <option value="OSOGBO">📍 OSOGBO</option>
@@ -1310,6 +1311,7 @@ function updateManualFileList() {
                             <option value="AKURE">AKURE</option>
                             <option value="IBADAN">IBADAN</option>
                             <option value="IBADAN-MOKOLA">IBADAN-MOKOLA</option>
+                            <option value="IBADAN-ORITA">IBADAN-ORITA</option>
                             <option value="ADO-EKITI">ADO-EKITI</option>
                             <option value="ILORIN">ILORIN</option>
                             <option value="OSOGBO">OSOGBO</option>
@@ -2884,6 +2886,7 @@ function showEditUserModal(userId, user) {
                                                 <option value="AKURE" ${safeLocation === 'AKURE' ? 'selected' : ''}>AKURE</option>
                                                 <option value="IBADAN" ${safeLocation === 'IBADAN' ? 'selected' : ''}>IBADAN</option>
                                                 <option value="IBADAN-MOKOLA" ${safeLocation === 'IBADAN-MOKOLA' ? 'selected' : ''}>IBADAN-MOKOLA</option>
+                                                <option value="IBADAN-ORITA" ${safeLocation === 'IBADAN-ORITA' ? 'selected' : ''}>IBADAN-ORITA</option>
                                                 <option value="ADO-EKITI" ${safeLocation === 'ADO-EKITI' ? 'selected' : ''}>ADO-EKITI</option>
                                                 <option value="ILORIN" ${safeLocation === 'ILORIN' ? 'selected' : ''}>ILORIN</option>
                                                 <option value="OSOGBO" ${safeLocation === 'OSOGBO' ? 'selected' : ''}>OSOGBO</option>
@@ -4441,7 +4444,8 @@ function getLocationName(code) {
         'C': 'ADO-EKITI',
         'D': 'ILORIN',
         'E': 'OSOGBO',
-        'F': 'IBADAN-MOKOLA'
+        'F': 'IBADAN-MOKOLA',
+        'G': 'IBADAN-ORITA'
     };
     return locations[code] || '';
 }
@@ -4652,6 +4656,7 @@ function showEditStylistModal(stylistKey, stylist) {
                                         <option value="AKURE" ${safeLocation === 'AKURE' ? 'selected' : ''}>AKURE</option>
                                         <option value="IBADAN" ${safeLocation === 'IBADAN' ? 'selected' : ''}>IBADAN</option>
                                         <option value="IBADAN-MOKOLA" ${safeLocation === 'IBADAN-MOKOLA' ? 'selected' : ''}>IBADAN-MOKOLA</option>
+                                        <option value="IBADAN-ORITA" ${safeLocation === 'IBADAN-ORITA' ? 'selected' : ''}>IBADAN-ORITA</option>
                                         <option value="ADO-EKITI" ${safeLocation === 'ADO-EKITI' ? 'selected' : ''}>ADO-EKITI</option>
                                         <option value="ILORIN" ${safeLocation === 'ILORIN' ? 'selected' : ''}>ILORIN</option>
                                         <option value="OSOGBO" ${safeLocation === 'OSOGBO' ? 'selected' : ''}>OSOGBO</option>
